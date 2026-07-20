@@ -1,0 +1,70 @@
+name: Synchro 4escape -> Gamedoor
+
+# Robot quotidien : lit le CA + les sessions sur 4escape et les ecrit dans le
+# Firebase du dashboard. Voir sync-4escape/README.md pour la configuration.
+
+on:
+  schedule:
+    # 02:07 UTC = 04:07 (ete) / 03:07 (hiver) heure de Paris : en pleine nuit,
+    # apres la cloture du jour. Le robot traite LE JOUR PRECEDENT (la veille).
+    # (minute 07 volontaire : evite la congestion du "top of the hour" GitHub.)
+    - cron: '7 2 * * *'
+  workflow_dispatch:
+    inputs:
+      target_date:
+        description: "Jour a traiter (YYYY-MM-DD). Vide = hier (Paris)."
+        required: false
+        default: ''
+      dry_run:
+        description: "1 = telecharger + analyser mais NE RIEN ecrire dans Firebase (test)"
+        required: false
+        default: '0'
+
+concurrency:
+  group: sync-4escape
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: sync-4escape/package-lock.json
+
+      - name: Install deps
+        working-directory: sync-4escape
+        run: npm ci || npm install
+
+      - name: Install Chromium
+        working-directory: sync-4escape
+        run: npx playwright install --with-deps chromium
+
+      - name: Run sync
+        working-directory: sync-4escape
+        env:
+          FE_BASE:      ${{ secrets.FE_BASE }}
+          FE_USER:      ${{ secrets.FE_USER }}
+          FE_PASS:      ${{ secrets.FE_PASS }}
+          FB_URL:       ${{ secrets.FB_URL }}
+          JOURNAL_PATH: ${{ secrets.JOURNAL_PATH }}
+          TZ:           'Europe/Paris'
+          TARGET_DATE:  ${{ github.event.inputs.target_date || '' }}
+          DRY_RUN:      ${{ github.event.inputs.dry_run     || '0' }}
+        run: node scrape.mjs
+
+      - name: Upload debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-4escape
+          path: sync-4escape/debug/
+          if-no-files-found: ignore
+          retention-days: 7

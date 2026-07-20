@@ -1,0 +1,18 @@
+{
+  "name": "gamedoor-sync-4escape",
+  "version": "2.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Robot quotidien : telecharge le Journal des ventes 4escape (jour precedent, commandes payees) et ecrit le CA + sessions dans le Firebase du dashboard Gamedoor.",
+  "scripts": {
+    "sync": "node scrape.mjs",
+    "test:headful": "node scrape.mjs --headful --keep-open --dry-run"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "playwright": "^1.48.0",
+    "xlsx": "^0.18.5"
+  }
+}
