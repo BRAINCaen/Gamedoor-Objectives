@@ -24,14 +24,18 @@ plutôt que d'écrire un chiffre faux.
 
 | Champ du dashboard | Source | Auto ? |
 |---|---|---|
-| **CA du jour** | Journal des ventes (commandes payées) | ✅ oui |
-| **Nb de sessions** | Journal (colonne dédiée, ou nb de lignes) | ✅ oui *(à confirmer en calibration)* |
+| **CA du jour** | Journal des ventes 4escape (net des codes/chèques) | ✅ oui |
+| **Nb de sessions** | Journal 4escape (sessions **jouées**, date d'évènement) | ✅ oui |
+| **Avis Google** (`avis`) | Compteur d'avis du site GAMEDOOR41 (pipeline Google Places existant) — `avis du jour = total ce soir − total d'hier soir` (mémo dans `state/autoMeta/googleReviews`) | ✅ oui |
 | **Ventes Co** (`options`) | — | ❌ manuel |
-| **Avis Google** (`avis`) | Google (hors 4escape) | ❌ manuel |
 
-👉 **À dire à l'équipe : ne plus saisir le CA ni les sessions à la main** (sinon
-double comptage). Les game masters continuent de saisir **les avis Google** (et les
-ventes co) — ce qui garde le classement / XP par personne pertinent.
+👉 **À dire à l'équipe : ne plus saisir le CA, les sessions NI les avis à la main**
+(sinon double comptage). Seules les **ventes co** restent en saisie manuelle.
+
+> ℹ️ Avis : le workflow `update-google-reviews` du dépôt **GAMEDOOR41** tourne
+> désormais à ~00h20 (au lieu de 05h) pour que le robot (00h33) lise un compteur
+> frais. Sans clé API à fournir — le robot lit le JSON public du site. Optionnel :
+> ajouter le secret `GOOGLE_PLACES_API_KEY` pour interroger l'API Google en direct.
 
 La saisie du robot apparaît dans « Dernières saisies » sous **🤖 4escape (auto)**,
 avec une **clé fixe par jour** (`auto-2026-07-20`) : si le robot repasse, il
@@ -85,9 +89,11 @@ journée → relance avec `dry_run` = `0`. Ensuite le robot tourne **seul chaque
 ---
 
 ## ⏰ Horaire
-Planifié à **02:07 UTC** = **04:07 (été) / 03:07 (hiver)** heure de Paris, en pleine
-nuit, et traite **la veille** (journée complète et clôturée). Pour changer l'heure,
-modifie `cron:` dans `.github/workflows/sync-4escape.yml` (⚠️ heure en **UTC**).
+Objectif : **~00h33 heure de Paris toute l'année**, pour traiter **la journée qui
+vient de se terminer**. Comme les crons GitHub sont en UTC (et que l'heure d'été
+décale tout), **deux crons** sont programmés (22:33 et 23:33 UTC) et le script
+vérifie l'heure de Paris (`RUN_WINDOW_HOUR=0`) : seul le déclenchement qui tombe
+entre 00h et 01h s'exécute, l'autre se saute proprement.
 
 ---
 

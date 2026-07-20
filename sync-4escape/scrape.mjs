@@ -229,6 +229,47 @@ function analyseJournal(filePath, dayFR, mode = 'ventes') {
 }
 
 // ---------------------------------------------------------------------------
+// 4bis) Avis Google — reutilise le pipeline du site GAMEDOOR41
+//   Par defaut : lit le JSON public que le script du site (update-google-reviews)
+//   publie dans le depot BRAINCaen/GAMEDOOR41. Si GOOGLE_PLACES_API_KEY est
+//   fourni, interroge directement l'API Places (meme requete que le site).
+//   avis du jour = total actuel - total memorise la veille (state/autoMeta).
+// ---------------------------------------------------------------------------
+const REVIEWS_JSON_URL = process.env.REVIEWS_JSON_URL ||
+  'https://raw.githubusercontent.com/BRAINCaen/GAMEDOOR41/main/data/google-reviews.json';
+const PLACES_QUERY = process.env.PLACES_QUERY || 'Brain Escape Game 41 bis rue Pasteur Caen';
+
+async function fetchReviewsTotal() {
+  try {
+    const key = process.env.GOOGLE_PLACES_API_KEY;
+    if (key) {
+      const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        method: 'POST',
+        headers: {
+          'X-Goog-Api-Key': key,
+          'X-Goog-FieldMask': 'places.id,places.rating,places.userRatingCount',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ textQuery: PLACES_QUERY, maxResultCount: 5, languageCode: 'fr', regionCode: 'FR' }),
+      });
+      if (!res.ok) throw new Error(`Places API ${res.status}`);
+      const data = await res.json();
+      const m = (data.places || []).find((p) => typeof p.userRatingCount === 'number');
+      if (!m) throw new Error('etablissement introuvable via Places');
+      return { count: m.userRatingCount, rating: m.rating ?? null, source: 'places-api' };
+    }
+    const res = await fetch(REVIEWS_JSON_URL, { headers: { 'Cache-Control': 'no-cache' } });
+    if (!res.ok) throw new Error(`JSON avis ${res.status}`);
+    const j = await res.json();
+    if (typeof j.reviewCount !== 'number') throw new Error('champ reviewCount absent');
+    return { count: j.reviewCount, rating: j.rating ?? null, source: 'site-json', majLe: j.updatedAt || null };
+  } catch (e) {
+    log('⚠️  Avis Google indisponibles cette nuit :', e.message, '(avis = 0, le reste continue)');
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 5) Ecriture Firebase (PUT idempotent, cle fixe par jour)
 // ---------------------------------------------------------------------------
 async function writeToFirebase(entry) {
@@ -322,6 +363,15 @@ async function runExport(page, dumpDebug, kind, wants) {
 // 7) Programme principal
 // ---------------------------------------------------------------------------
 async function main() {
+  // Fenetre horaire (runs planifies) : deux crons UTC couvrent ete/hiver, seul
+  // celui qui tombe dans la bonne heure de Paris s'execute — l'autre se saute.
+  if (process.env.RUN_WINDOW_HOUR !== undefined && process.env.RUN_WINDOW_HOUR !== '') {
+    const parisHour = parseInt(new Intl.DateTimeFormat('fr-FR', { timeZone: CFG.tz, hour: 'numeric', hour12: false }).format(new Date()), 10);
+    if (parisHour !== parseInt(process.env.RUN_WINDOW_HOUR, 10)) {
+      log(`Heure de Paris = ${parisHour}h, fenetre attendue = ${process.env.RUN_WINDOW_HOUR}h : ce declenchement se saute (l'autre cron est le bon). Fin normale.`);
+      return;
+    }
+  }
   log(`Robot 4escape (Journal des ventes ×2) · jour cible = ${targetDate} (${targetFR})`);
   if (!CFG.user || !CFG.pass) { fail('Identifiants manquants : definis FE_USER et FE_PASS.'); return; }
   fs.mkdirSync(CFG.debugDir, { recursive: true });
@@ -403,7 +453,20 @@ async function main() {
       throw new Error(`Incoherence comptable export ventes : HT (${ventes.ht}) + TVA (${ventes.tva}) != TTC (${ventes.ttc}). Rien n'est ecrit.`);
     }
 
-    fs.writeFileSync(path.join(CFG.debugDir, 'parsed-preview.json'), JSON.stringify({ targetDate, ventes, joue }, null, 2));
+    // --- Avis Google (delta vs total memorise) -------------------------------
+    const gr = await fetchReviewsTotal();
+    let avis = 0, avisInfo = null, prevCount = null;
+    if (gr) {
+      try {
+        const pr = await fetch(`${CFG.fbUrl}/state/autoMeta/googleReviews.json`);
+        if (pr.ok) { const p = await pr.json(); if (p && typeof p.count === 'number') prevCount = p.count; }
+      } catch { /* premiere fois : pas de memoire */ }
+      if (prevCount != null) avis = Math.max(0, gr.count - prevCount);
+      avisInfo = { totalAvis: gr.count, note: gr.rating, precedent: prevCount, nouveaux: avis, source: gr.source };
+      log(`⭐ Avis Google : total ${gr.count} (note ${gr.rating ?? '—'}) · memorise ${prevCount ?? '— (1re fois)'} · nouveaux du jour = ${avis}`);
+    }
+
+    fs.writeFileSync(path.join(CFG.debugDir, 'parsed-preview.json'), JSON.stringify({ targetDate, ventes, joue, avis: avisInfo }, null, 2));
 
     // --- Ecriture Firebase --------------------------------------------------
     const entry = {
@@ -412,7 +475,7 @@ async function main() {
       ca: Math.round(caEncaisse),          // CA encaisse du jour = ventes - cheques utilises + cheques achetes
       sessions: joue.sessions,             // sessions JOUEES ce jour-la (cheques exclus)
       options: 0,                          // ventes co : saisie manuelle
-      avis: 0,                             // avis Google : saisie manuelle
+      avis,                                // nouveaux avis Google depuis le dernier releve
       players: joue.joueurs,
       detail: {
         vendu: {
@@ -427,6 +490,7 @@ async function main() {
           caJoue: joue.ttc, sessions: joue.sessions, joueurs: joue.joueurs,
           chequesAchetes: joue.caBonsCadeaux, nbChequesAchetes: joue.nbBonsCadeaux,
         },
+        avisGoogle: avisInfo,
         caEncaisse,
       },
       source: 'journal-ventes-x2',
@@ -436,7 +500,17 @@ async function main() {
     log('Saisie preparee :', JSON.stringify(entry));
 
     if (CFG.dryRun) log('DRY-RUN : rien ecrit dans Firebase.');
-    else { await writeToFirebase(entry); log(`✅ Ecrit dans Firebase : state/entries/auto-${targetDate}`); }
+    else {
+      await writeToFirebase(entry);
+      log(`✅ Ecrit dans Firebase : state/entries/auto-${targetDate}`);
+      if (gr) {
+        // Memorise le total d'avis pour le calcul du delta de demain
+        await fetch(`${CFG.fbUrl}/state/autoMeta/googleReviews.json`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ count: gr.count, rating: gr.rating, at: new Date().toISOString() }),
+        }).then((r) => { if (!r.ok) log('⚠️ memo avis non enregistre :', r.status); });
+      }
+    }
 
     if (CFG.keepOpen) { log('--keep-open : navigateur laisse ouvert (Ctrl+C pour quitter).'); await page.waitForTimeout(600000); }
   } catch (err) {

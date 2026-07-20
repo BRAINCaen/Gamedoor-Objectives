@@ -5,10 +5,12 @@ name: Synchro 4escape -> Gamedoor
 
 on:
   schedule:
-    # 02:07 UTC = 04:07 (ete) / 03:07 (hiver) heure de Paris : en pleine nuit,
-    # apres la cloture du jour. Le robot traite LE JOUR PRECEDENT (la veille).
-    # (minute 07 volontaire : evite la congestion du "top of the hour" GitHub.)
-    - cron: '7 2 * * *'
+    # Objectif : ~00h30 heure de Paris toute l'annee. Les crons GitHub sont en
+    # UTC : 22:33 UTC = 00:33 Paris en ETE, 23:33 UTC = 00:33 Paris en HIVER.
+    # Les DEUX sont programmes ; le script verifie l'heure de Paris (RUN_WINDOW_HOUR)
+    # et seul le declenchement qui tombe dans l'heure 00h-01h s'execute.
+    - cron: '33 22 * * *'
+    - cron: '33 23 * * *'
   workflow_dispatch:
     inputs:
       target_date:
@@ -55,9 +57,14 @@ jobs:
           FE_PASS:      ${{ secrets.FE_PASS }}
           FB_URL:       ${{ secrets.FB_URL }}
           JOURNAL_PATH: ${{ secrets.JOURNAL_PATH }}
+          # Avis Google : lit le JSON public du site GAMEDOOR41 par defaut ;
+          # renseigner GOOGLE_PLACES_API_KEY (optionnel) pour interroger l'API en direct.
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
           TZ:           'Europe/Paris'
           TARGET_DATE:  ${{ github.event.inputs.target_date || '' }}
           DRY_RUN:      ${{ github.event.inputs.dry_run     || '0' }}
+          # Sur les runs planifies uniquement : n'agir que si l'heure de Paris est 00h-01h
+          RUN_WINDOW_HOUR: ${{ github.event_name == 'schedule' && '0' || '' }}
         run: node scrape.mjs
 
       - name: Upload debug artifacts
