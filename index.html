@@ -236,19 +236,10 @@
   <header>
     <div class="head-row">
       <div>
-        <div class="brand-tag">GAMEDOOR °41 · Tableau de bord d'équipe</div>
+        <div class="brand-tag">GAMEDOOR °41 · Objectifs d'équipe</div>
         <h1 class="title">La course aux objectifs</h1>
-        <div class="head-sub">Chaque game master saisit les chiffres du jour — la progression avance en temps réel 🚀</div>
+        <div class="head-sub">Chiffres synchronisés automatiquement chaque nuit depuis 4escape 🤖 — XP &amp; défis individuels sur SYNERGIA</div>
         <div class="sync-pill" id="syncPill"><span class="dot"></span><span id="syncTxt">Connexion…</span></div>
-      </div>
-      <div class="team-level">
-        <div class="level-badge" id="teamLevelNum">1</div>
-        <div class="level-info">
-          <div class="lab">Niveau d'équipe</div>
-          <div class="name" id="teamLevelName">Recrue</div>
-          <div class="xp-track"><div class="xp-fill" id="teamXpFill"></div></div>
-          <div class="xp-txt" id="teamXpTxt">0 XP</div>
-        </div>
       </div>
     </div>
   </header>
@@ -303,10 +294,10 @@
       <div class="kpi-sub" id="kAvisSub">Récoltés ce mois</div>
     </div>
     <div class="kpi">
-      <div class="kpi-top"><div class="kpi-ic">🎯</div><div><div class="kpi-name">Ventes Co</div><div class="kpi-goal">Ventes additionnelles</div></div></div>
-      <div class="kpi-val low" id="kOptions">0</div>
-      <div class="kpi-track"><div class="kpi-bar p" id="kOptionsBar"></div></div>
-      <div class="kpi-sub" id="kOptionsSub">Photos, boissons, packs…</div>
+      <div class="kpi-top"><div class="kpi-ic">🧑‍🤝‍🧑</div><div><div class="kpi-name">Joueurs</div><div class="kpi-goal">Accueillis ce mois</div></div></div>
+      <div class="kpi-val low" id="kJoueurs">0</div>
+      <div class="kpi-track"><div class="kpi-bar p" id="kJoueursBar"></div></div>
+      <div class="kpi-sub" id="kJoueursSub">En attente de synchro</div>
     </div>
   </div>
 
@@ -324,11 +315,6 @@
         <div class="field"><label>Objectif avis Google / mois</label><input type="number" id="setTargetAvis" min="0" step="1"><div class="hint">Note visée ≥ 4,8</div></div>
         <div class="field"><label>Jours d'ouverture / mois</label><input type="number" id="setOpenDays" min="1" step="1"><div class="hint">Pour l'objectif du jour</div></div>
       </div>
-      <div class="field" style="margin-top:6px">
-        <label>Équipe — clique ✎ pour renommer, la pastille pour changer d'avatar</label>
-        <div class="roster-list" id="rosterList"></div>
-        <div style="display:flex;gap:8px"><input type="text" id="newGm" placeholder="Créer un personnage (prénom)…" style="flex:1"><button class="btn btn-ghost btn-sm" onclick="addGm()">Ajouter</button></div>
-      </div>
       <div class="set-actions">
         <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ Exporter (CSV)</button>
         <button class="btn btn-ghost btn-sm" onclick="resetMonth()">↺ Nouveau mois</button>
@@ -339,34 +325,21 @@
 
   <div class="cols">
     <div class="card">
-      <h2>📝 Saisie du jour</h2>
-      <div class="card-sub">Fin de service — 30 secondes chrono</div>
-      <div class="field"><label>Qui saisit ?</label><select id="inGm"></select></div>
-      <div class="field"><label>Date</label><input type="date" id="inDate"></div>
-      <div class="grid2">
-        <div class="field"><label>CA du jour (€)</label><input type="number" id="inCa" min="0" step="1" placeholder="0"><div class="hint">Total encaissé</div></div>
-        <div class="field"><label>Nb de sessions</label><input type="number" id="inSessions" min="0" step="1" placeholder="0"><div class="hint">Parties jouées</div></div>
+      <h2>📅 Dernière journée synchronisée</h2>
+      <div class="card-sub" id="todayDate">en attente de la première synchro</div>
+      <div class="today-grid">
+        <div class="today-cell"><div class="lab">CA encaissé</div><div class="v" id="tCa">0 €</div></div>
+        <div class="today-cell"><div class="lab">Sessions jouées</div><div class="v small" id="tSessions">0</div></div>
+        <div class="today-cell"><div class="lab">Panier moyen</div><div class="v small" id="tPanier">— €</div></div>
+        <div class="today-cell"><div class="lab">Nouveaux avis</div><div class="v small" id="tAvis">0</div></div>
       </div>
-      <div class="grid2">
-        <div class="field"><label>Ventes Co</label><input type="number" id="inOptions" min="0" step="1" placeholder="0"><div class="hint">Photos, boissons, packs</div></div>
-        <div class="field"><label>Avis Google récoltés</label><input type="number" id="inAvis" min="0" step="1" placeholder="0"><div class="hint">Demandés à chaud</div></div>
-      </div>
-      <button class="btn btn-gold" onclick="submitEntry()">Valider la journée ✦</button>
+      <div class="day-goal miss" id="dayGoal">Objectif du jour : — €</div>
     </div>
 
     <div class="card">
-      <h2>📅 Aujourd'hui</h2>
-      <div class="card-sub" id="todayDate">—</div>
-      <div class="today-grid">
-        <div class="today-cell"><div class="lab">CA du jour</div><div class="v" id="tCa">0 €</div></div>
-        <div class="today-cell"><div class="lab">Sessions</div><div class="v small" id="tSessions">0</div></div>
-        <div class="today-cell"><div class="lab">Panier moyen</div><div class="v small" id="tPanier">— €</div></div>
-        <div class="today-cell"><div class="lab">Avis récoltés</div><div class="v small" id="tAvis">0</div></div>
-      </div>
-      <div class="day-goal miss" id="dayGoal">Objectif du jour : — €</div>
-      <h2 style="margin-top:22px">🏆 Classement du mois</h2>
-      <div class="card-sub">XP par personnage</div>
-      <div id="leaderboard"></div>
+      <h2>🔍 Détail de la dernière synchro</h2>
+      <div class="card-sub">Ce que le robot a lu sur 4escape</div>
+      <div id="syncDetail" class="log-empty">En attente de la première synchro…</div>
     </div>
   </div>
 
@@ -377,8 +350,8 @@
   </div>
 
   <div class="card">
-    <h2>🧾 Dernières saisies</h2>
-    <div class="card-sub">Historique du mois — cliquer sur ✕ pour corriger une erreur</div>
+    <h2>🧾 Journal des synchronisations</h2>
+    <div class="card-sub">Une ligne par jour, écrite par le robot 🤖 — ✕ pour supprimer une journée</div>
     <div id="log"></div>
   </div>
 
@@ -408,7 +381,6 @@ let TEAM_PIN = "4141";  // code d'équipe — change-le ici si tu veux
 /* ---- constantes ---- */
 const LKEY='gamedoor_sync_v1';       // stockage local (mode local + prefs device)
 const AVATARS=['🎮','🕹️','🧩','🔦','🕵️','🦸','🧙','🐉','👾','🎩','🦊','🚀','🐺','🦉','⚡'];
-const LEVELS=[[0,'Recrue'],[400,'Éclaireur'],[1000,'Game Master'],[2000,'Vétéran'],[3500,'Maître du jeu'],[5500,'Légende °41']];
 const DEFAULT_CFG={targetBronze:27000,targetArgent:30000,targetOr:33000,targetPlatine:36000,targetAvis:30,openDays:26,panierTarget:104};
 const DEFAULT_ROSTER=[{name:'Game Master 1',avatar:'🎮'},{name:'Game Master 2',avatar:'🕹️'},{name:'Game Master 3',avatar:'🧩'},{name:'Game Master 4',avatar:'🔦'}];
 
@@ -512,13 +484,8 @@ function normRoster(r){
 
 /* ---- WRITES (branch on mode) ---- */
 function fb(){return MODE==='firebase'&&db;}
-function pushEntry(e){
-  if(fb()){const key=db.ref('state/entries').push().key;db.ref('state/entries/'+key).set({gm:e.gm,date:e.date,ca:e.ca,sessions:e.sessions,options:e.options,avis:e.avis,ts:e.ts});}
-  else{e.id='e'+Date.now()+Math.round(e.ca+e.sessions);state.entries.push(e);commitLocal();}
-}
 function removeEntry(id){ if(fb())db.ref('state/entries/'+id).remove(); else{state.entries=state.entries.filter(e=>e.id!==id);commitLocal();} }
 function writeConfig(){ if(fb())db.ref('state/config').set(state.config); else commitLocal(); }
-function writeRoster(){ if(fb())db.ref('state/roster').set(state.roster); else commitLocal(); }
 
 /* ============================================================
    GATE (PIN) + reveal app
@@ -534,7 +501,6 @@ function tryPin(){
 }
 function revealApp(){
   document.getElementById('app').style.display='block';
-  document.getElementById('inDate').value=todayStr();
   bindSettings();
   ready=true;
   afterState();
@@ -562,37 +528,34 @@ function monthLabel(mk){const p=mk.split('-');return MONTHS[parseInt(p[1],10)-1]
 function fmt(n){return Math.round(n).toLocaleString('fr-FR');}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function monthEntries(){const mk=curMonth();return state.entries.filter(e=>monthKey(e.date)===mk);}
-function todayEntries(){const t=todayStr();return state.entries.filter(e=>e.date===t);}
 function sum(arr,f){return arr.reduce((a,e)=>a+(f(e)||0),0);}
 function avatarOf(name){const r=state.roster.find(x=>x.name===name);return r?r.avatar:'🎮';}
 function platineT(){return state.config.targetPlatine||Math.round(state.config.targetArgent*1.2);}
 function tierOf(ca){const ts=[state.config.targetBronze,state.config.targetArgent,state.config.targetOr,platineT()];let c=-1;for(let i=0;i<4;i++)if(ca>=ts[i])c=i;return c;}
-function gmXP(name){const mk=curMonth();const es=state.entries.filter(e=>e.gm===name&&monthKey(e.date)===mk);
-  return sum(es,e=>e.sessions*10)+sum(es,e=>e.options*5)+sum(es,e=>e.avis*20)+Math.round(sum(es,e=>e.ca)/50);}
-function levelFor(xp){let lvl=1,name=LEVELS[0][1],cur=0,next=LEVELS[1][0];
-  for(let i=0;i<LEVELS.length;i++){if(xp>=LEVELS[i][0]){lvl=i+1;name=LEVELS[i][1];cur=LEVELS[i][0];next=(LEVELS[i+1]||LEVELS[i])[0];}}
-  return {lvl,name,cur,next};}
+// Derniere journee synchronisee : la date de saisie la plus recente du mois
+function latestDay(){const ds=[...new Set(monthEntries().map(e=>e.date))].sort();return ds.length?ds[ds.length-1]:null;}
 
 const BADGE_DEFS=[
-  {id:'first',ic:'🚀',name:'C\'est parti !',desc:'1re saisie enregistrée',test:m=>m.entries.length>=1},
+  {id:'first',ic:'🚀',name:'C\'est parti !',desc:'1re synchro du mois',test:m=>m.entries.length>=1},
   {id:'ca50',ic:'🥉',name:'Premier palier',desc:'Objectif Bronze atteint',test:m=>m.ca>=state.config.targetBronze},
   {id:'caGoal',ic:'🥇',name:'Médaille d\'Or',desc:'Objectif Or atteint',test:m=>m.ca>=state.config.targetOr},
   {id:'panier',ic:'💎',name:'Panier d\'or',desc:'Panier moyen ≥ 104 €',test:m=>m.panier>=state.config.panierTarget&&m.sessions>=10},
   {id:'avis',ic:'⭐',name:'5 étoiles',desc:'Objectif avis atteint',test:m=>m.avis>=state.config.targetAvis},
   {id:'sessions',ic:'🎪',name:'Centurion',desc:'100 sessions ce mois',test:m=>m.sessions>=100},
-  {id:'options',ic:'🎁',name:'Vendeur né',desc:'50 Ventes Co',test:m=>m.options>=50},
-  {id:'streak',ic:'📆',name:'Régularité',desc:'Saisies sur 7 jours',test:m=>m.days>=7}
+  {id:'joueurs',ic:'🧑‍🤝‍🧑',name:'Foule en délire',desc:'500 joueurs ce mois',test:m=>m.joueurs>=500},
+  {id:'streak',ic:'📆',name:'Régularité',desc:'Activité sur 7 jours',test:m=>m.days>=7}
 ];
 
 /* ============================================================
    RENDER
    ============================================================ */
-function afterState(){ if(!ready)return; renderRoster(); render(); }
+function afterState(){ if(!ready)return; render(); }
 
 function render(){
   const C=state.config;
-  const me=monthEntries(), te=todayEntries();
-  const caM=sum(me,e=>e.ca), sessM=sum(me,e=>e.sessions), optM=sum(me,e=>e.options), avisM=sum(me,e=>e.avis);
+  const me=monthEntries();
+  const lday=latestDay(), te=lday?me.filter(e=>e.date===lday):[];
+  const caM=sum(me,e=>e.ca), sessM=sum(me,e=>e.sessions), avisM=sum(me,e=>e.avis), joueursM=sum(me,e=>e.players);
   const panier=sessM>0?caM/sessM:0;
   const caT=sum(te,e=>e.ca), sessT=sum(te,e=>e.sessions), avisT=sum(te,e=>e.avis);
   const panierT=sessT>0?caT/sessT:0;
@@ -633,10 +596,12 @@ function render(){
   document.getElementById('kSessionsSub').textContent='≈ '+sessGoal+' pour l\'objectif CA';
   setGauge('kAvis',fmt(avisM),'kAvisBar',C.targetAvis>0?avisM/C.targetAvis*100:0,avisM>=C.targetAvis?'ok':avisM>=C.targetAvis*0.5?'mid':'low');
   document.getElementById('kAvisSub').textContent=C.targetAvis+' visés · note ≥ 4,8';
-  setGauge('kOptions',fmt(optM),'kOptionsBar',sessM>0?optM/sessM*100*3:0,(sessM>0&&optM>=sessM/3)?'ok':'low');
-  document.getElementById('kOptionsSub').textContent=sessM>0?(Math.round(optM/sessM*100)+' % des parties'):'Photos, boissons, packs…';
+  const jSess=joueursM>0&&sessM>0?joueursM/sessM:0;
+  setGauge('kJoueurs',fmt(joueursM),'kJoueursBar',jSess/6*100,jSess>=4?'ok':jSess>0?'mid':'low');
+  document.getElementById('kJoueursSub').textContent=jSess>0?('≈ '+(Math.round(jSess*10)/10).toLocaleString('fr-FR')+' joueurs / session'):'En attente de synchro';
 
-  document.getElementById('todayDate').textContent=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+  const ld=lday?new Date(lday+'T00:00'):null;
+  document.getElementById('todayDate').textContent=ld?ld.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}):'en attente de la première synchro';
   document.getElementById('tCa').textContent=fmt(caT)+' €';
   document.getElementById('tSessions').textContent=fmt(sessT);
   document.getElementById('tPanier').textContent=(panierT>0?fmt(panierT):'—')+' €';
@@ -646,22 +611,26 @@ function render(){
   if(caT>=dayGoal&&caT>0){dg.className='day-goal';dg.innerHTML='✅ Objectif du jour atteint ! ('+fmt(dayGoal)+' €)';}
   else{dg.className='day-goal miss';dg.innerHTML='🎯 Objectif du jour : '+fmt(dayGoal)+' € &nbsp;·&nbsp; reste '+fmt(Math.max(0,dayGoal-caT))+' €';}
 
-  const lb=document.getElementById('leaderboard');
-  const ranked=state.roster.map(r=>({n:r.name,av:r.avatar,xp:gmXP(r.name)})).filter(r=>r.xp>0).sort((a,b)=>b.xp-a.xp);
-  if(ranked.length===0){lb.innerHTML='<div class="lb-empty">Aucune saisie ce mois — soyez le premier ! 🎮</div>';}
-  else{const medals=['🥇','🥈','🥉'];lb.innerHTML=ranked.map((r,i)=>{const L=levelFor(r.xp);
-    return '<div class="lb-row"><div class="lb-rank">'+(medals[i]||(i+1))+'</div><div class="lb-name">'+r.av+' '+esc(r.n)+'<span class="lvl">Niv.'+L.lvl+' · '+L.name+'</span></div><div class="lb-xp">'+fmt(r.xp)+' XP</div></div>';}).join('');}
-
-  const totalXP=state.roster.reduce((a,r)=>a+gmXP(r.name),0);
-  const TL=levelFor(totalXP);
-  document.getElementById('teamLevelNum').textContent=TL.lvl;
-  document.getElementById('teamLevelName').textContent=TL.name;
-  const span=Math.max(1,TL.next-TL.cur), into=totalXP-TL.cur;
-  document.getElementById('teamXpFill').style.width=Math.min(100,into/span*100)+'%';
-  document.getElementById('teamXpTxt').textContent=fmt(totalXP)+' XP'+(totalXP<LEVELS[LEVELS.length-1][0]?(' · '+fmt(TL.next-totalXP)+' XP → niv.'+(TL.lvl+1)):' · niveau max');
+  // Detail de la derniere synchro (champ detail des saisies auto du robot)
+  const sd=document.getElementById('syncDetail');
+  const lastAuto=te.find(e=>e.detail&&e.detail.vendu);
+  if(!lastAuto){sd.className='log-empty';sd.textContent='En attente de la première synchro…';}
+  else{const d=lastAuto.detail,v=d.vendu||{},j=d.joue||{},euro=(x)=>fmt(x||0)+' €';
+    const rows=[
+      ['💰 Ventes du jour (brut)',euro(v.ttcBrut)],
+      ['🎫 dont sessions vendues',euro(v.sessions)+' ('+(v.nbSessions||0)+')'],
+      ['🎁 Chèques cadeaux achetés','+'+euro(j.chequesAchetes)+' ('+(j.nbChequesAchetes||0)+')'],
+      ['💳 Chèques utilisés en paiement','−'+euro(v.chequesUtilises)+' ('+(v.nbChequesUtilises||0)+')'],
+      ['🛍️ Autres produits',euro(v.produits)+(v.listeProduits&&v.listeProduits.length?' · '+esc(v.listeProduits.join(', ')):'')],
+      ['🏷️ Remises / codes appliqués','−'+euro(v.remises)],
+      ['🎮 Sessions jouées',(j.sessions||0)+' · '+(j.joueurs||0)+' joueurs'],
+      ['⭐ Avis Google',(d.avisGoogle?('total '+d.avisGoogle.totalAvis+' · note '+(d.avisGoogle.note||'—')+' · +'+(d.avisGoogle.nouveaux||0)+' ce jour'):'—')],
+    ];
+    sd.className='';
+    sd.innerHTML=rows.map(r=>'<div class="log-row"><div class="log-gm">'+r[0]+'</div><div class="log-ca" style="font-size:13px">'+r[1]+'</div></div>').join('');}
 
   const days=new Set(me.map(e=>e.date)).size;
-  const m={entries:me,ca:caM,sessions:sessM,options:optM,avis:avisM,panier:panier,days:days};
+  const m={entries:me,ca:caM,sessions:sessM,avis:avisM,joueurs:joueursM,panier:panier,days:days};
   document.getElementById('badges').innerHTML=BADGE_DEFS.map(b=>{const on=b.test(m);
     return '<div class="badge'+(on?' earned':'')+'"><div class="badge-ic">'+b.ic+'</div><div class="badge-name">'+b.name+'</div><div class="badge-desc">'+b.desc+'</div></div>';}).join('');
 
@@ -672,44 +641,6 @@ function render(){
     return '<div class="log-row"><div class="log-gm">'+avatarOf(e.gm)+' '+esc(e.gm)+'</div><div class="log-meta">'+d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+' · '+e.sessions+' sess · '+e.avis+'★</div><div class="log-ca">'+fmt(e.ca)+' €</div><button class="log-del" title="Supprimer" onclick="removeEntry(\''+e.id+'\')">✕</button></div>';}).join('');}
 }
 function setGauge(valId,val,barId,pct,cls){const v=document.getElementById(valId);v.textContent=val;v.className='kpi-val '+cls;document.getElementById(barId).style.width=Math.max(0,Math.min(100,pct))+'%';}
-
-/* ---- roster ---- */
-function renderRoster(){
-  const rl=document.getElementById('rosterList'); if(!rl)return;
-  rl.innerHTML=state.roster.map((r,i)=>
-    '<span class="roster-chip"><button class="chip-av" title="Changer d\'avatar" onclick="cycleAvatar('+i+')">'+r.avatar+'</button><span class="chip-name" title="Renommer" onclick="renameGm('+i+')">'+esc(r.name)+' ✎</span><button title="Retirer" onclick="delGm('+i+')">✕</button></span>').join('');
-  const sel=document.getElementById('inGm');const cur=sel.value;
-  sel.innerHTML=state.roster.map(r=>'<option value="'+esc(r.name)+'">'+r.avatar+'  '+esc(r.name)+'</option>').join('');
-  if(state.roster.some(r=>r.name===cur))sel.value=cur;
-}
-function addGm(){const i=document.getElementById('newGm');const v=i.value.trim();
-  if(!v)return; if(state.roster.some(r=>r.name===v)){toast('⚠️','Ce prénom existe déjà');return;}
-  state.roster.push({name:v,avatar:AVATARS[state.roster.length%AVATARS.length]});i.value='';writeRoster();toast('✨','Personnage créé : '+v);}
-function delGm(i){if(state.roster.length<=1){toast('⚠️','Garde au moins un personnage');return;}
-  state.roster.splice(i,1);writeRoster();}
-function renameGm(i){const old=state.roster[i].name;const v=(prompt('Nom du personnage (ex : Polar) :',old)||'').trim();
-  if(!v||v===old)return; if(state.roster.some((r,j)=>j!==i&&r.name===v)){toast('⚠️','Ce prénom existe déjà');return;}
-  state.roster[i].name=v;
-  if(fb()){const upd={};state.entries.forEach(e=>{if(e.gm===old)upd[e.id+'/gm']=v;});db.ref('state/roster').set(state.roster);if(Object.keys(upd).length)db.ref('state/entries').update(upd);}
-  else{state.entries.forEach(e=>{if(e.gm===old)e.gm=v;});commitLocal();}
-  toast('✏️',old+' → '+v);}
-function cycleAvatar(i){const c=AVATARS.indexOf(state.roster[i].avatar);state.roster[i].avatar=AVATARS[(c+1)%AVATARS.length];writeRoster();}
-
-/* ---- entry ---- */
-function submitEntry(){
-  const gm=document.getElementById('inGm').value;
-  const date=document.getElementById('inDate').value||todayStr();
-  const ca=Math.max(0,parseFloat(document.getElementById('inCa').value)||0);
-  const sessions=Math.max(0,parseInt(document.getElementById('inSessions').value)||0);
-  const options=Math.max(0,parseInt(document.getElementById('inOptions').value)||0);
-  const avis=Math.max(0,parseInt(document.getElementById('inAvis').value)||0);
-  if(ca===0&&sessions===0&&options===0&&avis===0){toast('🤔','Rien à enregistrer');return;}
-  const gained=sessions*10+options*5+avis*20+Math.round(ca/50);
-  pushEntry({gm,date,ca,sessions,options,avis,ts:Date.now()});
-  ['inCa','inSessions','inOptions','inAvis'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('heroCa').classList.add('pop');setTimeout(()=>document.getElementById('heroCa').classList.remove('pop'),500);
-  toast('✦','+'+gained+' XP pour '+avatarOf(gm)+' '+gm+' — bien joué !');
-}
 
 /* ---- settings ---- */
 function bindSettings(){
