@@ -128,17 +128,19 @@ le mois par erreur).
 
 ---
 
-## 🔒 SÉCURITÉ IMPORTANTE — verrouille ta base Firebase
-Ta base Firebase est actuellement **ouverte en lecture ET écriture à tout le monde**
-(vérifié). L'adresse est visible dans `index.html` (dépôt public) → **n'importe qui
-peut lire ou effacer les chiffres de ton équipe.**
+## 🔒 SÉCURITÉ — verrouiller la base Firebase (2 étapes)
+Par défaut la base est **ouverte en lecture ET écriture à tout le monde**. Le robot
+ET le dashboard savent maintenant s'authentifier en **anonyme** — il suffit donc de :
 
-À corriger : console Firebase → **Realtime Database → Règles**. Version recommandée
-(garde l'auth anonyme que `index.html` utilise déjà) :
+**Étape 1 — activer l'auth anonyme** (sinon tout casse) : console Firebase → projet
+`gamedoor-objectives` → **Authentication → Sign-in method → Anonymous → Activer**.
 
+**Étape 2 — verrouiller les règles** : console → **Realtime Database → Règles** :
 ```json
 {
   "rules": {
+    ".read": false,
+    ".write": false,
     "state": {
       ".read": "auth != null",
       ".write": "auth != null"
@@ -147,9 +149,13 @@ peut lire ou effacer les chiffres de ton équipe.**
 }
 ```
 
-⚠️ Si tu appliques ça, **préviens-moi** : le robot écrit aujourd'hui en direct (base
-ouverte). Il faudra lui ajouter une petite authentification (via la clé web Firebase,
-comme `index.html`). C'est rapide.
+Le robot récupère un jeton anonyme au démarrage (clé web publique, aucun secret
+nécessaire) et signe toutes ses écritures. Le dashboard fait pareil.
+
+> Niveau de protection : correct, pas Fort Knox. `auth != null` bloque les écritures
+> « en un clic » (n'importe qui avec l'URL), mais l'auth anonyme reste ouverte à tous.
+> Pour un vrai cloisonnement (robot seul autorisé à écrire), il faudrait un compte de
+> service — dis-le-moi si tu veux ce niveau.
 
 ---
 

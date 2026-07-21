@@ -270,10 +270,33 @@ async function fetchReviewsTotal() {
 }
 
 // ---------------------------------------------------------------------------
+// 4ter) Authentification Firebase (anonyme, comme le dashboard) — necessaire
+//   quand les regles RTDB passent a `auth != null`. Sur base ouverte, le token
+//   est simplement ignore : ce code marche dans les deux cas.
+// ---------------------------------------------------------------------------
+let FB_TOKEN = null;
+async function ensureAuth() {
+  if (FB_TOKEN) return;
+  const apiKey = process.env.FB_API_KEY || 'AIzaSyDda_GKBMHyaVrT4vzosMZnri3hyFCCwYs'; // cle web publique (deja dans index.html)
+  try {
+    const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ returnSecureToken: true }),
+    });
+    if (r.ok) { FB_TOKEN = (await r.json()).idToken; log('🔐 Firebase : authentifié (anonyme).'); return; }
+    log(`⚠️ Firebase auth anonyme : HTTP ${r.status} (écriture tentée sans token).`);
+  } catch (e) { log('⚠️ Firebase auth anonyme échouée :', e.message); }
+}
+// Construit une URL RTDB en ajoutant le token d'auth s'il existe.
+function rtdbUrl(pathJson) {
+  return `${CFG.fbUrl}${pathJson}` + (FB_TOKEN ? `?auth=${FB_TOKEN}` : '');
+}
+
+// ---------------------------------------------------------------------------
 // 5) Ecriture Firebase (PUT idempotent, cle fixe par jour)
 // ---------------------------------------------------------------------------
 async function writeToFirebase(entry) {
-  const url = `${CFG.fbUrl}/state/entries/auto-${entry.date}.json`;
+  await ensureAuth();
+  const url = rtdbUrl(`/state/entries/auto-${entry.date}.json`);
   const res = await fetch(url, {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry),
   });
@@ -329,7 +352,8 @@ async function syncSynergiaVentes() {
     target: defi.targetValue ?? null, current: defi.currentValue ?? null, status: defi.status || null,
     contributors, updatedAt: new Date().toISOString(),
   };
-  await fetch(`${CFG.fbUrl}/state/ventesCo.json`, {
+  await ensureAuth();
+  await fetch(rtdbUrl('/state/ventesCo.json'), {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(summary),
   }).then((r) => { if (r.ok) log(`🛍️ Ventes co Synergia synchronisées : ${contributors.length} vendeur(s), défi ${summary.current}/${summary.target}.`); else log('⚠️ Ventes co : écriture RTDB échouée ' + r.status); });
 }
@@ -362,12 +386,13 @@ async function synPostXp(body) {
 
 // Lecture/ecriture de l'etat d'idempotence dans le RTDB Gamedoor.
 async function synMeta(monthKey) {
-  const url = `${CFG.fbUrl}/state/autoMeta/synergiaXp.json`;
-  try { const r = await fetch(url); if (r.ok) { const j = await r.json(); return j || {}; } } catch { /* vide */ }
+  await ensureAuth();
+  try { const r = await fetch(rtdbUrl('/state/autoMeta/synergiaXp.json')); if (r.ok) { const j = await r.json(); return j || {}; } } catch { /* vide */ }
   return {};
 }
 async function saveSynMeta(meta) {
-  await fetch(`${CFG.fbUrl}/state/autoMeta/synergiaXp.json`, {
+  await ensureAuth();
+  await fetch(rtdbUrl('/state/autoMeta/synergiaXp.json'), {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(meta),
   }).catch(() => {});
 }
@@ -497,6 +522,7 @@ async function main() {
   log(`Robot 4escape (Journal des ventes ×2) · jour cible = ${targetDate} (${targetFR})`);
   if (!CFG.user || !CFG.pass) { fail('Identifiants manquants : definis FE_USER et FE_PASS.'); return; }
   fs.mkdirSync(CFG.debugDir, { recursive: true });
+  await ensureAuth();   // token Firebase des le depart (RTDB verrouille -> auth != null)
 
   const browser = await chromium.launch({ headless: !CFG.headful });
   const context = await browser.newContext({
@@ -580,7 +606,8 @@ async function main() {
     let avis = 0, avisInfo = null, prevCount = null;
     if (gr) {
       try {
-        const pr = await fetch(`${CFG.fbUrl}/state/autoMeta/googleReviews.json`);
+        await ensureAuth();
+        const pr = await fetch(rtdbUrl('/state/autoMeta/googleReviews.json'));
         if (pr.ok) { const p = await pr.json(); if (p && typeof p.count === 'number') prevCount = p.count; }
       } catch { /* premiere fois : pas de memoire */ }
       if (prevCount != null) avis = Math.max(0, gr.count - prevCount);
@@ -628,7 +655,7 @@ async function main() {
       if (gr) {
         // Memorise le total d'avis pour le calcul du delta de demain (AVANT
         // l'envoi Synergia -> pas de double credit si l'envoi echoue/rejoue).
-        await fetch(`${CFG.fbUrl}/state/autoMeta/googleReviews.json`, {
+        await fetch(rtdbUrl('/state/autoMeta/googleReviews.json'), {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ count: gr.count, rating: gr.rating, at: new Date().toISOString() }),
         }).then((r) => { if (!r.ok) log('⚠️ memo avis non enregistre :', r.status); });
@@ -637,7 +664,7 @@ async function main() {
       const month = targetDate.slice(0, 7);
       let caMonth = 0;
       try {
-        const er = await fetch(`${CFG.fbUrl}/state/entries.json`);
+        const er = await fetch(rtdbUrl('/state/entries.json'));
         if (er.ok) { const all = await er.json();
           caMonth = Object.values(all || {}).filter((e) => e && e.date && e.date.slice(0, 7) === month).reduce((a, e) => a + (e.ca || 0), 0); }
       } catch { /* cumul indispo -> paliers sautes ce tour */ }
