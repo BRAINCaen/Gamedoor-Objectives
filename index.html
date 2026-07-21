@@ -301,8 +301,54 @@
     </div>
   </div>
 
+  <div class="cols">
+    <div style="display:flex;flex-direction:column;gap:22px">
+      <div class="card">
+        <h2>📅 Hier</h2>
+        <div class="card-sub" id="todayDate">en attente de la première synchro</div>
+        <div class="today-grid">
+          <div class="today-cell"><div class="lab">CA encaissé</div><div class="v" id="tCa">0 €</div></div>
+          <div class="today-cell"><div class="lab">Sessions jouées</div><div class="v small" id="tSessions">0</div></div>
+          <div class="today-cell"><div class="lab">Panier moyen</div><div class="v small" id="tPanier">— €</div></div>
+          <div class="today-cell"><div class="lab">Nouveaux avis</div><div class="v small" id="tAvis">0</div></div>
+        </div>
+        <div class="day-goal miss" id="dayGoal">Objectif du jour : — €</div>
+      </div>
+
+      <div class="card">
+        <h2>🗓️ Semaine dernière</h2>
+        <div class="card-sub" id="weekLabel">—</div>
+        <div class="today-grid">
+          <div class="today-cell"><div class="lab">CA encaissé</div><div class="v" id="wCa">0 €</div></div>
+          <div class="today-cell"><div class="lab">Sessions jouées</div><div class="v small" id="wSessions">0</div></div>
+          <div class="today-cell"><div class="lab">Joueurs accueillis</div><div class="v small" id="wJoueurs">0</div></div>
+          <div class="today-cell"><div class="lab">Nouveaux avis</div><div class="v small" id="wAvis">0</div></div>
+        </div>
+        <div class="day-goal miss" id="weekCompare" style="margin-top:14px">—</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🔍 Détail de la dernière synchro</h2>
+      <div class="card-sub">Ce que le robot a lu sur 4escape</div>
+      <div id="syncDetail" class="log-empty">En attente de la première synchro…</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:22px">
+    <h2>🏆 Victoires de l'équipe</h2>
+    <div class="card-sub">Débloquées collectivement ce mois</div>
+    <div class="badges" id="badges"></div>
+  </div>
+
+  <div class="card">
+    <h2>🧾 Journal des synchronisations</h2>
+    <div class="card-sub">Historique de contrôle — une ligne par jour, écrite par le robot 🤖</div>
+    <div id="log"></div>
+  </div>
+
   <details class="settings" id="settings">
-    <summary>Réglages · équipe & objectifs</summary>
+    <summary>Réglages · objectifs</summary>
     <div class="settings-body">
       <div style="font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);font-weight:800;margin:2px 0 10px">🎖 Objectifs CA du mois — 3 scénarios + dépassement</div>
       <div class="set-grid">
@@ -322,50 +368,6 @@
       </div>
     </div>
   </details>
-
-  <div class="cols">
-    <div class="card">
-      <h2>📅 Dernière journée synchronisée</h2>
-      <div class="card-sub" id="todayDate">en attente de la première synchro</div>
-      <div class="today-grid">
-        <div class="today-cell"><div class="lab">CA encaissé</div><div class="v" id="tCa">0 €</div></div>
-        <div class="today-cell"><div class="lab">Sessions jouées</div><div class="v small" id="tSessions">0</div></div>
-        <div class="today-cell"><div class="lab">Panier moyen</div><div class="v small" id="tPanier">— €</div></div>
-        <div class="today-cell"><div class="lab">Nouveaux avis</div><div class="v small" id="tAvis">0</div></div>
-      </div>
-      <div class="day-goal miss" id="dayGoal">Objectif du jour : — €</div>
-    </div>
-
-    <div class="card">
-      <h2>🔍 Détail de la dernière synchro</h2>
-      <div class="card-sub">Ce que le robot a lu sur 4escape</div>
-      <div id="syncDetail" class="log-empty">En attente de la première synchro…</div>
-    </div>
-  </div>
-
-  <div class="card" style="margin-bottom:22px">
-    <h2>🗓️ Semaine dernière</h2>
-    <div class="card-sub" id="weekLabel">—</div>
-    <div class="today-grid">
-      <div class="today-cell"><div class="lab">CA encaissé</div><div class="v" id="wCa">0 €</div></div>
-      <div class="today-cell"><div class="lab">Sessions jouées</div><div class="v small" id="wSessions">0</div></div>
-      <div class="today-cell"><div class="lab">Joueurs accueillis</div><div class="v small" id="wJoueurs">0</div></div>
-      <div class="today-cell"><div class="lab">Nouveaux avis</div><div class="v small" id="wAvis">0</div></div>
-    </div>
-    <div class="day-goal miss" id="weekCompare" style="margin-top:14px">—</div>
-  </div>
-
-  <div class="card" style="margin-bottom:22px">
-    <h2>🎖 Badges de l'équipe</h2>
-    <div class="card-sub">Débloqués collectivement ce mois</div>
-    <div class="badges" id="badges"></div>
-  </div>
-
-  <div class="card">
-    <h2>🧾 Journal des synchronisations</h2>
-    <div class="card-sub">Une ligne par jour, écrite par le robot 🤖 — ✕ pour supprimer une journée</div>
-    <div id="log"></div>
-  </div>
 
   <footer id="footNote">GAMEDOOR °41 · BOEHME</footer>
 </div>
@@ -496,7 +498,6 @@ function normRoster(r){
 
 /* ---- WRITES (branch on mode) ---- */
 function fb(){return MODE==='firebase'&&db;}
-function removeEntry(id){ if(fb())db.ref('state/entries/'+id).remove(); else{state.entries=state.entries.filter(e=>e.id!==id);commitLocal();} }
 function writeConfig(){ if(fb())db.ref('state/config').set(state.config); else commitLocal(); }
 
 /* ============================================================
@@ -669,7 +670,7 @@ function render(){
   const sorted=me.slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,25);
   if(sorted.length===0){log.innerHTML='<div class="log-empty">Pas encore de saisie ce mois.</div>';}
   else{log.innerHTML=sorted.map(e=>{const d=new Date(e.date+'T00:00');
-    return '<div class="log-row"><div class="log-gm">'+avatarOf(e.gm)+' '+esc(e.gm)+'</div><div class="log-meta">'+d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+' · '+e.sessions+' sess · '+e.avis+'★</div><div class="log-ca">'+fmt(e.ca)+' €</div><button class="log-del" title="Supprimer" onclick="removeEntry(\''+e.id+'\')">✕</button></div>';}).join('');}
+    return '<div class="log-row"><div class="log-gm">'+avatarOf(e.gm)+' '+esc(e.gm)+'</div><div class="log-meta">'+d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+' · '+e.sessions+' sess · '+e.avis+'★</div><div class="log-ca">'+fmt(e.ca)+' €</div></div>';}).join('');}
 }
 function setGauge(valId,val,barId,pct,cls){const v=document.getElementById(valId);v.textContent=val;v.className='kpi-val '+cls;document.getElementById(barId).style.width=Math.max(0,Math.min(100,pct))+'%';}
 
