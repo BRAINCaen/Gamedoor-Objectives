@@ -336,6 +336,24 @@
   </div>
 
   <div class="card" style="margin-bottom:22px">
+    <h2>🔥 Records de l'équipe</h2>
+    <div class="card-sub">Les sommets à battre — performances collectives</div>
+    <div class="today-grid">
+      <div class="today-cell"><div class="lab">Record de CA · journée</div><div class="v" id="rRecord">0 €</div><div class="kpi-sub" id="rRecordDate">—</div></div>
+      <div class="today-cell"><div class="lab">Meilleur jour du mois</div><div class="v small" id="rBestDay">0 €</div><div class="kpi-sub" id="rBestDayDate">—</div></div>
+      <div class="today-cell"><div class="lab">Meilleure semaine</div><div class="v small" id="rBestWeek">0 €</div><div class="kpi-sub" id="rBestWeekLabel">—</div></div>
+      <div class="today-cell"><div class="lab">Record de joueurs · jour</div><div class="v small" id="rBestPlayers">0</div><div class="kpi-sub" id="rBestPlayersDate">—</div></div>
+    </div>
+    <div class="day-goal" id="rFlag" style="margin-top:14px;display:none"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:22px">
+    <h2>🛍️ Ventes co — l'équipe qui vend</h2>
+    <div class="card-sub" id="ventesCoSub">Déclarées dans SYNERGIA</div>
+    <div id="ventesCoBody" class="log-empty">En attente…</div>
+  </div>
+
+  <div class="card" style="margin-bottom:22px">
     <h2>🏆 Victoires de l'équipe</h2>
     <div class="card-sub">Débloquées collectivement ce mois</div>
     <div class="badges" id="badges"></div>
@@ -483,6 +501,7 @@ function attachFB(){
     state.config=Object.assign({},DEFAULT_CFG,v.config||{});
     state.roster=normRoster(v.roster)||DEFAULT_ROSTER.map(r=>Object.assign({},r));
     state.entries=v.entries?Object.keys(v.entries).map(k=>Object.assign({id:k},v.entries[k])):[];
+    state.ventesCo=v.ventesCo||null;
     if(v.config===undefined){db.ref('state/config').set(state.config);}
     if(v.roster===undefined){db.ref('state/roster').set(state.roster);}
     syncPill('on');
@@ -661,6 +680,32 @@ function render(){
     if(dpc>=0){wc.className='day-goal';wc.innerHTML='📈 +'+dpc+' % vs la semaine d\'avant ('+fmt(pCa)+' €)';}
     else{wc.className='day-goal miss';wc.innerHTML='📉 '+dpc+' % vs la semaine d\'avant ('+fmt(pCa)+' €)';}}
   else{wc.className='day-goal miss';wc.textContent='Pas encore d\'historique pour comparer';}
+
+  // Records de l'équipe (collectif, sans nommer personne)
+  const allPos=state.entries.filter(e=>e.ca>0);
+  const bestAll=allPos.reduce((b,e)=> e.ca>(b?b.ca:0)?e:b, null);
+  const bestMonth=me.filter(e=>e.ca>0).reduce((b,e)=> e.ca>(b?b.ca:0)?e:b, null);
+  const bestPlayers=allPos.reduce((b,e)=> (e.players||0)>(b?(b.players||0):0)?e:b, null);
+  const wk={};
+  for(const e of allPos){const d=new Date(e.date+'T00:00');const dow=(d.getDay()+6)%7;const mon=new Date(d);mon.setDate(d.getDate()-dow);const k=ymd(mon);wk[k]=(wk[k]||0)+e.ca;}
+  const bestWk=Object.entries(wk).sort((a,b)=>b[1]-a[1])[0];
+  const jour=(ds)=>ds?new Date(ds+'T00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long'}):'—';
+  const setTxt=(id,t)=>{const el=document.getElementById(id);if(el)el.textContent=t;};
+  setTxt('rRecord',fmt(bestAll?bestAll.ca:0)+' €'); setTxt('rRecordDate',bestAll?jour(bestAll.date):'—');
+  setTxt('rBestDay',fmt(bestMonth?bestMonth.ca:0)+' €'); setTxt('rBestDayDate',bestMonth?jour(bestMonth.date):'ce mois');
+  setTxt('rBestWeek',fmt(bestWk?bestWk[1]:0)+' €'); setTxt('rBestWeekLabel',bestWk?('semaine du '+jour(bestWk[0])):'—');
+  setTxt('rBestPlayers',fmt(bestPlayers?(bestPlayers.players||0):0)); setTxt('rBestPlayersDate',bestPlayers?jour(bestPlayers.date):'—');
+  const rFlag=document.getElementById('rFlag');
+  if(rFlag){ if(bestAll&&lday&&bestAll.date===lday&&allPos.length>1){rFlag.style.display='block';rFlag.className='day-goal';rFlag.innerHTML='🎉 Nouveau record de CA battu : '+fmt(bestAll.ca)+' € le '+jour(bestAll.date)+' !';}
+    else rFlag.style.display='none'; }
+
+  // Ventes co — vendeurs (déclarées dans SYNERGIA, résumé écrit par le robot)
+  const vc=state.ventesCo, vb=document.getElementById('ventesCoBody'), vs=document.getElementById('ventesCoSub');
+  if(vb&&vs){ if(!vc||!vc.contributors||!vc.contributors.length){vb.className='log-empty';vb.textContent='Aucune vente co déclarée pour le moment — à saisir dans SYNERGIA.';vs.textContent='Déclarées dans SYNERGIA';}
+    else{ vs.textContent='Défi « '+esc(vc.title||'ventes')+' » · '+(vc.current??0)+'/'+(vc.target??'?')+' '+esc(vc.unit||'');
+      const md=['🥇','🥈','🥉'];
+      vb.className='';
+      vb.innerHTML=vc.contributors.map((c,i)=>'<div class="lb-row"><div class="lb-rank">'+(md[i]||(i+1))+'</div><div class="lb-name">'+esc(c.name)+'</div><div class="lb-xp">'+c.total+' '+esc(vc.unit||'ventes')+'</div></div>').join(''); } }
 
   const m={ca:caM,sessions:sessM,avis:avisM,joueurs:joueursM,panier:panier};
   document.getElementById('badges').innerHTML=BADGE_DEFS.map(b=>{const on=b.test(m);

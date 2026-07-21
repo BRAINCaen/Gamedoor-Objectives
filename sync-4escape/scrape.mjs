@@ -283,6 +283,128 @@ async function writeToFirebase(entry) {
 }
 
 // ---------------------------------------------------------------------------
+// 5bis) SYNERGIA — attribution d'XP a la CAGNOTTE d'equipe (paliers CA + avis)
+//   Endpoint POST /api/v1/xp (cle "Lecture + XP"). Les ventes co individuelles
+//   sont saisies manuellement dans Synergia -> le robot n'y touche pas.
+//   IDEMPOTENCE : etat memorise dans le RTDB Gamedoor (state/autoMeta/synergiaXp).
+// ---------------------------------------------------------------------------
+const SYN = {
+  base: (process.env.SYN_API_BASE || 'https://synergia-brain-caen.netlify.app').replace(/\/+$/, ''),
+  key: process.env.SYN_XP_KEY || '',                                        // ecriture (Lecture + XP)
+  readKey: process.env.SYN_READ_KEY || process.env.SYN_XP_KEY || '',        // lecture seule
+};
+
+// GET vers l'API Synergia (chemin direct connu-bon d'abord, puis /api/v1).
+async function synGet(pathQ, key) {
+  if (!key) return { ok: false, error: 'clé lecture Synergia absente' };
+  for (const base of ['/.netlify/functions/api', '/api/v1']) {
+    let res;
+    try { res = await fetch(SYN.base + base + pathQ, { headers: { Authorization: 'Bearer ' + key } }); }
+    catch (e) { return { ok: false, error: e.message }; }
+    const txt = await res.text();
+    let j = null; try { j = JSON.parse(txt); } catch { /* SPA HTML -> mauvais chemin */ }
+    if (j === null) continue;
+    return { ok: res.ok, status: res.status, body: j };
+  }
+  return { ok: false, error: 'endpoint API Synergia introuvable' };
+}
+
+// Lit le defi "ventes co" (declare manuellement dans Synergia) et ecrit un
+// resume SANS DONNEES SENSIBLES dans le RTDB Gamedoor -> affiche par le dashboard.
+async function syncSynergiaVentes() {
+  if (!SYN.readKey) { log('ℹ️  Ventes co : clé lecture Synergia absente → non mis à jour.'); return; }
+  const res = await synGet('/team_challenges?limit=100', SYN.readKey);
+  if (!res.ok) { log('⚠️ Ventes co : lecture Synergia échouée (' + (res.status || res.error) + ').'); return; }
+  const items = res.body?.items || [];
+  const sales = items.filter((c) => /sales/i.test(c.type || '') || /vente/i.test(c.unit || '') || /vente/i.test(c.title || ''));
+  const defi = sales.find((c) => c.status === 'active') || sales.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))[0];
+  if (!defi) { log('ℹ️  Ventes co : aucun défi "ventes" trouvé dans Synergia.'); return; }
+
+  const byName = {};
+  for (const c of (defi.contributions || [])) { const n = (c.userName || '?').trim(); byName[n] = (byName[n] || 0) + (Number(c.amount) || 0); }
+  const contributors = Object.entries(byName).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
+
+  const summary = {
+    title: defi.title || 'Ventes co', unit: defi.unit || 'ventes',
+    target: defi.targetValue ?? null, current: defi.currentValue ?? null, status: defi.status || null,
+    contributors, updatedAt: new Date().toISOString(),
+  };
+  await fetch(`${CFG.fbUrl}/state/ventesCo.json`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(summary),
+  }).then((r) => { if (r.ok) log(`🛍️ Ventes co Synergia synchronisées : ${contributors.length} vendeur(s), défi ${summary.current}/${summary.target}.`); else log('⚠️ Ventes co : écriture RTDB échouée ' + r.status); });
+}
+const PALIERS = [
+  { id: 'bronze', xp: 300, cfgKey: 'targetBronze', def: 27000, label: 'Bronze' },
+  { id: 'argent', xp: 600, cfgKey: 'targetArgent', def: 30000, label: 'Argent' },
+  { id: 'or',     xp: 1200, cfgKey: 'targetOr',    def: 33000, label: 'Or' },
+];
+const XP_PAR_AVIS = 40;
+
+// POST /xp vers Synergia (tente /api/v1/xp puis le chemin direct de la fonction).
+async function synPostXp(body) {
+  if (!SYN.key) return { skipped: true };
+  for (const p of ['/api/v1/xp', '/.netlify/functions/api/xp']) {
+    let res;
+    try {
+      res = await fetch(SYN.base + p, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + SYN.key, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } catch (e) { return { ok: false, error: e.message }; }
+    const txt = await res.text();
+    let json = null; try { json = JSON.parse(txt); } catch { /* SPA HTML -> mauvais chemin */ }
+    if (json === null) continue;                 // pas du JSON => essaie le chemin direct
+    return { ok: res.ok, status: res.status, body: json };
+  }
+  return { ok: false, error: 'endpoint XP introuvable (ni /api/v1/xp ni /.netlify/functions/api/xp)' };
+}
+
+// Lecture/ecriture de l'etat d'idempotence dans le RTDB Gamedoor.
+async function synMeta(monthKey) {
+  const url = `${CFG.fbUrl}/state/autoMeta/synergiaXp.json`;
+  try { const r = await fetch(url); if (r.ok) { const j = await r.json(); return j || {}; } } catch { /* vide */ }
+  return {};
+}
+async function saveSynMeta(meta) {
+  await fetch(`${CFG.fbUrl}/state/autoMeta/synergiaXp.json`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(meta),
+  }).catch(() => {});
+}
+
+// Etape SYNERGIA : credite la cagnotte pour les paliers CA franchis ce mois +
+// les nouveaux avis. Retourne un resume pour le log. N'echoue jamais le run.
+async function pushSynergia({ month, caMonth, nouveauxAvis }) {
+  if (!SYN.key) { log('ℹ️  SYNERGIA : clé XP absente (SYN_XP_KEY) → étape sautée (rien n\'est envoyé).'); return; }
+  const meta = await synMeta();
+  meta.paliers = meta.paliers || {};
+  meta.paliers[month] = meta.paliers[month] || {};
+  let changed = false;
+
+  // Paliers CA (une seule fois par mois, quand le cumul les franchit)
+  for (const p of PALIERS) {
+    const seuil = Number(process.env['SEUIL_' + p.id.toUpperCase()]) || p.def;
+    if (caMonth >= seuil && !meta.paliers[month][p.id]) {
+      const res = await synPostXp({ target: 'teamPool', amount: p.xp, reason: `Palier ${p.label} atteint (${seuil} €)`, source: 'gamedoor_objectives' });
+      if (res.ok) { meta.paliers[month][p.id] = { xp: p.xp, at: new Date().toISOString() }; changed = true;
+        log(`🏆 SYNERGIA cagnotte +${p.xp} XP — palier ${p.label} (${seuil} €) franchi. ${res.body?.poolLevelChanged ? 'NIVEAU CAGNOTTE ↑' : ''}`); }
+      else log(`⚠️ SYNERGIA palier ${p.label} : échec envoi (${res.status || res.error}) — sera retenté demain.`);
+    }
+  }
+
+  // Avis Google : +40 XP cagnotte par nouvel avis (le delta est deja idempotent
+  // via le memo googleReviews ; on ne touche pas au memo ici).
+  if (nouveauxAvis > 0) {
+    const amount = Math.min(2000, nouveauxAvis * XP_PAR_AVIS);   // garde-fou 2000/appel
+    const res = await synPostXp({ target: 'teamPool', amount, reason: `${nouveauxAvis} nouvel(s) avis Google`, source: 'gamedoor_objectives' });
+    if (res.ok) { changed = true; log(`⭐ SYNERGIA cagnotte +${amount} XP — ${nouveauxAvis} nouvel(s) avis. ${res.body?.poolLevelChanged ? 'NIVEAU CAGNOTTE ↑' : ''}`); }
+    else log(`⚠️ SYNERGIA avis : échec envoi (${res.status || res.error}).`);
+  }
+
+  if (changed) await saveSynMeta(meta);
+}
+
+// ---------------------------------------------------------------------------
 // 6) Pilotage du formulaire : un export = reglages + periode + telechargement
 // ---------------------------------------------------------------------------
 async function runExport(page, dumpDebug, kind, wants) {
@@ -504,12 +626,24 @@ async function main() {
       await writeToFirebase(entry);
       log(`✅ Ecrit dans Firebase : state/entries/auto-${targetDate}`);
       if (gr) {
-        // Memorise le total d'avis pour le calcul du delta de demain
+        // Memorise le total d'avis pour le calcul du delta de demain (AVANT
+        // l'envoi Synergia -> pas de double credit si l'envoi echoue/rejoue).
         await fetch(`${CFG.fbUrl}/state/autoMeta/googleReviews.json`, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ count: gr.count, rating: gr.rating, at: new Date().toISOString() }),
         }).then((r) => { if (!r.ok) log('⚠️ memo avis non enregistre :', r.status); });
       }
+      // --- SYNERGIA : cagnotte d'equipe (paliers CA du mois + nouveaux avis) --
+      const month = targetDate.slice(0, 7);
+      let caMonth = 0;
+      try {
+        const er = await fetch(`${CFG.fbUrl}/state/entries.json`);
+        if (er.ok) { const all = await er.json();
+          caMonth = Object.values(all || {}).filter((e) => e && e.date && e.date.slice(0, 7) === month).reduce((a, e) => a + (e.ca || 0), 0); }
+      } catch { /* cumul indispo -> paliers sautes ce tour */ }
+      await pushSynergia({ month, caMonth, nouveauxAvis: avis });
+      // Rafraichit le mini-classement "ventes co" (declare dans Synergia)
+      await syncSynergiaVentes().catch((e) => log('⚠️ ventes co :', e.message));
     }
 
     if (CFG.keepOpen) { log('--keep-open : navigateur laisse ouvert (Ctrl+C pour quitter).'); await page.waitForTimeout(600000); }
@@ -525,4 +659,4 @@ async function main() {
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 if (isMain) main().catch((e) => fail(e.stack || e.message));
 
-export { analyseJournal, readExport, parisYMD };
+export { analyseJournal, readExport, parisYMD, syncSynergiaVentes, pushSynergia };

@@ -60,6 +60,11 @@ jobs:
           # Avis Google : lit le JSON public du site GAMEDOOR41 par defaut ;
           # renseigner GOOGLE_PLACES_API_KEY (optionnel) pour interroger l'API en direct.
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+          # SYNERGIA : SYN_READ_KEY lit les ventes co ; SYN_XP_KEY (clé "Lecture + XP")
+          # active l'envoi d'XP à la cagnotte (paliers CA + avis). Sans elle, XP sautés.
+          SYN_READ_KEY: ${{ secrets.SYN_READ_KEY }}
+          SYN_XP_KEY:   ${{ secrets.SYN_XP_KEY }}
+          SYN_API_BASE: ${{ secrets.SYN_API_BASE }}
           TZ:           'Europe/Paris'
           TARGET_DATE:  ${{ github.event.inputs.target_date || '' }}
           DRY_RUN:      ${{ github.event.inputs.dry_run     || '0' }}
