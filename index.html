@@ -521,7 +521,7 @@ function show(id,on){document.getElementById(id).classList.toggle('show',on);}
 function syncPill(kind){
   const p=document.getElementById('syncPill'),t=document.getElementById('syncTxt'),f=document.getElementById('footNote');
   if(!p)return; p.className='sync-pill';
-  if(kind==='on'){p.classList.add('on');t.textContent='Synchro en direct';f.textContent='GAMEDOOR °41 · BOEHME — Synchro temps réel activée';}
+  if(kind==='on'){p.classList.add('on');t.textContent='Mise à jour chaque nuit à 00h30';f.textContent='GAMEDOOR °41 · BOEHME — Synchro automatique chaque nuit à 00h30';}
   else if(kind==='local'){p.classList.add('local');t.textContent='Mode local (cet appareil)';f.textContent='GAMEDOOR °41 · BOEHME — Mode local, données sur cet appareil';}
   else if(kind==='connecting'){t.textContent='Connexion à la base…';}
   else{t.textContent='Hors ligne';}
