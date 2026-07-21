@@ -344,6 +344,18 @@
   </div>
 
   <div class="card" style="margin-bottom:22px">
+    <h2>🗓️ Semaine dernière</h2>
+    <div class="card-sub" id="weekLabel">—</div>
+    <div class="today-grid">
+      <div class="today-cell"><div class="lab">CA encaissé</div><div class="v" id="wCa">0 €</div></div>
+      <div class="today-cell"><div class="lab">Sessions jouées</div><div class="v small" id="wSessions">0</div></div>
+      <div class="today-cell"><div class="lab">Joueurs accueillis</div><div class="v small" id="wJoueurs">0</div></div>
+      <div class="today-cell"><div class="lab">Nouveaux avis</div><div class="v small" id="wAvis">0</div></div>
+    </div>
+    <div class="day-goal miss" id="weekCompare" style="margin-top:14px">—</div>
+  </div>
+
+  <div class="card" style="margin-bottom:22px">
     <h2>🎖 Badges de l'équipe</h2>
     <div class="card-sub">Débloqués collectivement ce mois</div>
     <div class="badges" id="badges"></div>
@@ -628,6 +640,29 @@ function render(){
     ];
     sd.className='';
     sd.innerHTML=rows.map(r=>'<div class="log-row"><div class="log-gm">'+r[0]+'</div><div class="log-ca" style="font-size:13px">'+r[1]+'</div></div>').join('');}
+
+  // Semaine derniere (lundi -> dimanche precedents) + comparaison
+  const now=new Date(); const dow=(now.getDay()+6)%7;             // 0 = lundi
+  const lastMon=new Date(now); lastMon.setDate(now.getDate()-dow-7);
+  const lastSun=new Date(lastMon); lastSun.setDate(lastMon.getDate()+6);
+  const prevMon=new Date(lastMon); prevMon.setDate(lastMon.getDate()-7);
+  const prevSun=new Date(lastMon); prevSun.setDate(lastMon.getDate()-1);
+  const inRange=(e,a,b)=>e.date>=ymd(a)&&e.date<=ymd(b);
+  const we=state.entries.filter(e=>inRange(e,lastMon,lastSun));
+  const pe=state.entries.filter(e=>inRange(e,prevMon,prevSun));
+  const wCa=sum(we,e=>e.ca), wSess=sum(we,e=>e.sessions), wJ=sum(we,e=>e.players), wAv=sum(we,e=>e.avis);
+  const pCa=sum(pe,e=>e.ca);
+  const fmtD=(d)=>d.toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
+  document.getElementById('weekLabel').textContent='du lundi '+fmtD(lastMon)+' au dimanche '+fmtD(lastSun);
+  document.getElementById('wCa').textContent=fmt(wCa)+' €';
+  document.getElementById('wSessions').textContent=fmt(wSess);
+  document.getElementById('wJoueurs').textContent=fmt(wJ);
+  document.getElementById('wAvis').textContent=fmt(wAv);
+  const wc=document.getElementById('weekCompare');
+  if(pCa>0){const dpc=Math.round((wCa-pCa)/pCa*100);
+    if(dpc>=0){wc.className='day-goal';wc.innerHTML='📈 +'+dpc+' % vs la semaine d\'avant ('+fmt(pCa)+' €)';}
+    else{wc.className='day-goal miss';wc.innerHTML='📉 '+dpc+' % vs la semaine d\'avant ('+fmt(pCa)+' €)';}}
+  else{wc.className='day-goal miss';wc.textContent='Pas encore d\'historique pour comparer';}
 
   const days=new Set(me.map(e=>e.date)).size;
   const m={entries:me,ca:caM,sessions:sessM,avis:avisM,joueurs:joueursM,panier:panier,days:days};
