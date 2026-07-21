@@ -548,14 +548,11 @@ function tierOf(ca){const ts=[state.config.targetBronze,state.config.targetArgen
 function latestDay(){const ds=[...new Set(monthEntries().map(e=>e.date))].sort();return ds.length?ds[ds.length-1]:null;}
 
 const BADGE_DEFS=[
-  {id:'first',ic:'🚀',name:'C\'est parti !',desc:'1re synchro du mois',test:m=>m.entries.length>=1},
   {id:'ca50',ic:'🥉',name:'Premier palier',desc:'Objectif Bronze atteint',test:m=>m.ca>=state.config.targetBronze},
   {id:'caGoal',ic:'🥇',name:'Médaille d\'Or',desc:'Objectif Or atteint',test:m=>m.ca>=state.config.targetOr},
   {id:'panier',ic:'💎',name:'Panier d\'or',desc:'Panier moyen ≥ 104 €',test:m=>m.panier>=state.config.panierTarget&&m.sessions>=10},
   {id:'avis',ic:'⭐',name:'5 étoiles',desc:'Objectif avis atteint',test:m=>m.avis>=state.config.targetAvis},
-  {id:'sessions',ic:'🎪',name:'Centurion',desc:'100 sessions ce mois',test:m=>m.sessions>=100},
-  {id:'joueurs',ic:'🧑‍🤝‍🧑',name:'Foule en délire',desc:'500 joueurs ce mois',test:m=>m.joueurs>=500},
-  {id:'streak',ic:'📆',name:'Régularité',desc:'Activité sur 7 jours',test:m=>m.days>=7}
+  {id:'joueurs',ic:'🧑‍🤝‍🧑',name:'Foule en délire',desc:'500 joueurs ce mois',test:m=>m.joueurs>=500}
 ];
 
 /* ============================================================
@@ -664,8 +661,7 @@ function render(){
     else{wc.className='day-goal miss';wc.innerHTML='📉 '+dpc+' % vs la semaine d\'avant ('+fmt(pCa)+' €)';}}
   else{wc.className='day-goal miss';wc.textContent='Pas encore d\'historique pour comparer';}
 
-  const days=new Set(me.map(e=>e.date)).size;
-  const m={entries:me,ca:caM,sessions:sessM,avis:avisM,joueurs:joueursM,panier:panier,days:days};
+  const m={ca:caM,sessions:sessM,avis:avisM,joueurs:joueursM,panier:panier};
   document.getElementById('badges').innerHTML=BADGE_DEFS.map(b=>{const on=b.test(m);
     return '<div class="badge'+(on?' earned':'')+'"><div class="badge-ic">'+b.ic+'</div><div class="badge-name">'+b.name+'</div><div class="badge-desc">'+b.desc+'</div></div>';}).join('');
 
