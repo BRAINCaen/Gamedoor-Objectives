@@ -58,6 +58,7 @@ const CFG = {
   fbUrl:       (process.env.FB_URL || 'https://gamedoor-objectives-default-rtdb.europe-west1.firebasedatabase.app').replace(/\/+$/, ''),
   journalPath:  process.env.JOURNAL_PATH || '/admin/statistics/accounting/journal-sales',
   dateArg:      getArg('date') || process.env.TARGET_DATE || '',   // defaut = hier (Paris)
+  backfill:     getArg('backfill') || process.env.BACKFILL || '',  // "YYYY-MM-DD:YYYY-MM-DD" (historique)
   headful:      Boolean(getArg('headful')),
   keepOpen:     Boolean(getArg('keep-open')),
   dryRun:       Boolean(getArg('dry-run') || process.env.DRY_RUN === '1'),
@@ -122,38 +123,33 @@ function readExport(filePath) {
 //    mode 'joue'   : filtre sur "Date d'évènement" (date de jeu) -> sessions
 //                    jouees (Room uniquement, cheques cadeaux exclus)
 // ---------------------------------------------------------------------------
-function analyseJournal(filePath, dayFR, mode = 'ventes') {
-  const aoa = readExport(filePath).filter((r) => r.some((c) => String(c).trim() !== ''));
-  const empty = { headers: [], totalRows: 0, dayRows: 0, otherDates: [], ttc: 0, ht: 0, tva: 0,
-    sessions: 0, joueurs: 0, caSessions: 0, caBonsCadeaux: 0, caProduits: 0, remises: 0,
-    nbBonsCadeaux: 0, nbProduits: 0, produits: [], codes: [] };
-  if (!aoa.length) return empty;
+// DD/MM/YYYY (ou D/M/YY) -> YYYY-MM-DD
+function frToISO(s) {
+  const m = String(s || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (!m) return null;
+  let [, d, mo, y] = m; if (y.length === 2) y = '20' + y;
+  return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+}
 
-  const headers = aoa[0].map((h) => String(h).trim());
-  const rows = aoa.slice(1);
+// Repere les colonnes du journal (leve une erreur si le format a change).
+function journalIdx(headers) {
   const idx = (name) => headers.findIndex((h) => h.toLowerCase() === name.toLowerCase());
-  const iCpt = idx('N° Compte général'), iFact = idx('Date de facture'),
-        iDeb = idx('Débit'), iCred = idx('Crédit'),
-        iCat = idx('Catégorie de produit'), iSess = idx('Session de jeu'),
-        iProd = idx('Produit'), iQte = idx('Quantité'),
-        iTax = idx('Taxes appliquées'), iEvt = idx("Date d'évènement");
-  const missing = Object.entries({ 'N° Compte général': iCpt, 'Date de facture': iFact, 'Débit': iDeb, 'Crédit': iCred })
+  const I = {
+    iCpt: idx('N° Compte général'), iFact: idx('Date de facture'), iDeb: idx('Débit'), iCred: idx('Crédit'),
+    iCat: idx('Catégorie de produit'), iSess: idx('Session de jeu'), iProd: idx('Produit'), iQte: idx('Quantité'),
+    iTax: idx('Taxes appliquées'), iEvt: idx("Date d'évènement"),
+  };
+  const missing = Object.entries({ 'N° Compte général': I.iCpt, 'Date de facture': I.iFact, 'Débit': I.iDeb, 'Crédit': I.iCred })
     .filter(([, i]) => i < 0).map(([n]) => n);
   if (missing.length) throw new Error(`Colonnes introuvables dans l'export : ${missing.join(', ')} — le format 4escape a change (voir debug/).`);
+  return I;
+}
 
-  // Colonne de date qui definit "le jour" selon le mode
-  const iDay = mode === 'joue' ? iEvt : iFact;
-  if (iDay < 0) throw new Error(`[${mode}] Colonne de date introuvable (${mode === 'joue' ? "Date d'évènement" : 'Date de facture'}).`);
-  // En mode 'joue', seules les lignes Room portent une date de jeu pertinente ;
-  // les lignes 411/TVA/cheques cadeaux sont ignorees par les calculs ci-dessous.
-  const dayRows = rows.filter((r) => String(r[iDay]).trim() === dayFR);
-  const otherDates = [...new Set(rows.map((r) => String(r[iDay]).trim()))].filter((d) => d && d !== dayFR);
-
-  let ttc = 0, ht = 0, tva = 0;
-  let caSessions = 0, caBonsCadeaux = 0, caProduits = 0, remises = 0;
-  let nbBonsCadeaux = 0, nbProduits = 0, joueurs = 0;
+// Agrege un sous-ensemble de lignes (= un jour) selon le mode. Logique inchangee.
+function aggregateRows(dayRows, I, mode) {
+  const { iCpt, iCat, iProd, iQte, iTax, iDeb, iCred, iSess, iEvt } = I;
+  let ttc = 0, ht = 0, tva = 0, caSessions = 0, caBonsCadeaux = 0, caProduits = 0, remises = 0, nbBonsCadeaux = 0, nbProduits = 0, joueurs = 0;
   const sess = new Set(); const produits = new Map(); const codes = new Map();
-
   for (const r of dayRows) {
     const cpt = String(r[iCpt]).trim();
     const cat = norm(iCat >= 0 ? r[iCat] : '');
@@ -162,57 +158,42 @@ function analyseJournal(filePath, dayFR, mode = 'ventes') {
     const taux = iTax >= 0 ? numFR(r[iTax]) : 0;
     const ttcOf = (montantHT) => montantHT * (1 + taux / 100);
 
-    // Mode "joue" (base date de prestation) :
-    //  · lignes Room  = sessions JOUEES ce jour (ttc = CA joue)
-    //  · lignes Cheque Cadeau = bons ACHETES ce jour (argent encaisse ce jour,
-    //    a AJOUTER au CA du jour, mais PAS une session jouee)
+    // Mode "joue" (base date de prestation) : Room = sessions JOUEES ; Cheque =
+    // bon ACHETE ce jour (a ajouter au CA, pas une session).
     if (mode === 'joue') {
       if (!cpt.startsWith('70') || cpt.startsWith('709')) continue;
       const m = numFR(r[iCred]) - numFR(r[iDeb]);
       const chq = cat.includes('cheque') || cat.includes('carte cadeau') || cat.includes('bon cadeau');
       if (chq) { caBonsCadeaux += ttcOf(m); nbBonsCadeaux += qte > 0 ? qte : 1; continue; }
       if (cat !== 'room') continue;
-      ht += m; ttc += ttcOf(m);                        // CA joue TTC (sessions + garanties liees)
+      ht += m; ttc += ttcOf(m);
       if (!prod.includes('garantie') && iSess >= 0 && String(r[iSess]).trim() !== '') {
-        sess.add(String(r[iSess]) + ' | ' + String(r[iEvt]));
-        joueurs += qte;
+        sess.add(String(r[iSess]) + ' | ' + String(r[iEvt])); joueurs += qte;
       }
       continue;
     }
 
     if (cpt.startsWith('411')) { ttc += numFR(r[iDeb]) - numFR(r[iCred]); continue; }
     if (cpt.startsWith('445')) { tva += numFR(r[iCred]) - numFR(r[iDeb]); continue; }
-    // Codes de reduction / vouchers utilises en paiement (cartes cadeaux BUZZ,
-    // TRIP, MARIAGE, Buzz 10/23, ...) : compte 709 OU categorie "Vouchers/Remises".
-    // Ils REDUISENT ce que paie le client — jamais comptes comme du CA.
     if (cpt.startsWith('709') || cat.includes('vouchers') || cat.includes('remise')) {
-      const m = numFR(r[iDeb]) - numFR(r[iCred]);
-      const mttc = ttcOf(m);
+      const m = numFR(r[iDeb]) - numFR(r[iCred]); const mttc = ttcOf(m);
       ht -= m; remises += mttc;
       const label = ((iProd >= 0 ? String(r[iProd]) : '') || 'Code / remise').trim().slice(0, 60);
       codes.set(label, (codes.get(label) || 0) + mttc);
       continue;
     }
-    if (!cpt.startsWith('70')) continue;               // autres comptes : ignores
-    const m = numFR(r[iCred]) - numFR(r[iDeb]);        // ligne de vente HT
-    ht += m;
-
+    if (!cpt.startsWith('70')) continue;
+    const m = numFR(r[iCred]) - numFR(r[iDeb]); ht += m;
     const isRoom = cat === 'room';
     const isGarantie = prod.includes('garantie');
     const isCheque = cat.includes('cheque') || cat.includes('carte cadeau') || cat.includes('bon cadeau');
-
-    if (isRoom && !isGarantie) {                       // vraie session
+    if (isRoom && !isGarantie) {
       caSessions += ttcOf(m);
-      if (iSess >= 0 && String(r[iSess]).trim() !== '') {
-        sess.add(String(r[iSess]) + ' | ' + (iEvt >= 0 ? String(r[iEvt]) : ''));
-        joueurs += qte;
-      }
-    } else if (isCheque) {                             // cheque / bon cadeau
-      caBonsCadeaux += ttcOf(m);
-      nbBonsCadeaux += qte > 0 ? qte : 1;
-    } else {                                           // garantie report, traiteur, privatisation, frais...
-      caProduits += ttcOf(m);
-      nbProduits += qte > 0 ? qte : 1;
+      if (iSess >= 0 && String(r[iSess]).trim() !== '') { sess.add(String(r[iSess]) + ' | ' + (iEvt >= 0 ? String(r[iEvt]) : '')); joueurs += qte; }
+    } else if (isCheque) {
+      caBonsCadeaux += ttcOf(m); nbBonsCadeaux += qte > 0 ? qte : 1;
+    } else {
+      caProduits += ttcOf(m); nbProduits += qte > 0 ? qte : 1;
       let nom = iProd >= 0 ? String(r[iProd]) : 'produit';
       if (isGarantie) nom = 'Garantie report de session';
       else if (prod.includes('frais de paiement')) nom = 'Frais de paiement partagé';
@@ -220,17 +201,45 @@ function analyseJournal(filePath, dayFR, mode = 'ventes') {
       produits.set(nom, (produits.get(nom) || 0) + (qte > 0 ? qte : 1));
     }
   }
-
   const r2 = (x) => Math.round(x * 100) / 100;
   return {
-    headers, totalRows: rows.length, dayRows: dayRows.length, otherDates,
-    ttc: r2(ttc), ht: r2(ht), tva: r2(tva),
-    sessions: sess.size, joueurs: Math.round(joueurs),
+    ttc: r2(ttc), ht: r2(ht), tva: r2(tva), sessions: sess.size, joueurs: Math.round(joueurs),
     caSessions: r2(caSessions), caBonsCadeaux: r2(caBonsCadeaux), caProduits: r2(caProduits), remises: r2(remises),
     nbBonsCadeaux: Math.round(nbBonsCadeaux), nbProduits: Math.round(nbProduits),
     produits: [...produits.entries()].slice(0, 10).map(([n, q]) => `${q}× ${n}`),
     codes: [...codes.entries()].map(([label, montant]) => ({ label, montant: r2(montant) })).sort((a, b) => b.montant - a.montant).slice(0, 20),
   };
+}
+
+// Analyse d'un export filtre sur UN jour (dayFR au format DD/MM/YYYY).
+function analyseJournal(filePath, dayFR, mode = 'ventes') {
+  const aoa = readExport(filePath).filter((r) => r.some((c) => String(c).trim() !== ''));
+  const empty = { headers: [], totalRows: 0, dayRows: 0, otherDates: [], ttc: 0, ht: 0, tva: 0,
+    sessions: 0, joueurs: 0, caSessions: 0, caBonsCadeaux: 0, caProduits: 0, remises: 0,
+    nbBonsCadeaux: 0, nbProduits: 0, produits: [], codes: [] };
+  if (!aoa.length) return empty;
+  const headers = aoa[0].map((h) => String(h).trim());
+  const rows = aoa.slice(1);
+  const I = journalIdx(headers);
+  const iDay = mode === 'joue' ? I.iEvt : I.iFact;
+  const dayRows = rows.filter((r) => String(r[iDay]).trim() === dayFR);
+  const otherDates = [...new Set(rows.map((r) => String(r[iDay]).trim()))].filter((d) => d && d !== dayFR);
+  return { headers, totalRows: rows.length, dayRows: dayRows.length, otherDates, ...aggregateRows(dayRows, I, mode) };
+}
+
+// Agrege TOUS les jours d'un export -> Map<YYYY-MM-DD, aggregate> (backfill).
+function analyseAllDays(filePath, mode = 'ventes') {
+  const aoa = readExport(filePath).filter((r) => r.some((c) => String(c).trim() !== ''));
+  const out = new Map();
+  if (!aoa.length) return out;
+  const headers = aoa[0].map((h) => String(h).trim());
+  const rows = aoa.slice(1);
+  const I = journalIdx(headers);
+  const iDay = mode === 'joue' ? I.iEvt : I.iFact;
+  const groups = new Map();
+  for (const r of rows) { const iso = frToISO(r[iDay]); if (!iso) continue; if (!groups.has(iso)) groups.set(iso, []); groups.get(iso).push(r); }
+  for (const [iso, rs] of groups) out.set(iso, aggregateRows(rs, I, mode));
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -435,10 +444,11 @@ async function pushSynergia({ month, caMonth, nouveauxAvis }) {
 }
 
 // ---------------------------------------------------------------------------
-// 6) Pilotage du formulaire : un export = reglages + periode + telechargement
+// 6) Pilotage du formulaire : reglages + periode (start/end ISO) + telechargement
+//    -> renvoie le chemin du fichier telecharge. startISO/endISO peuvent couvrir
+//    une plage (backfill) ou un seul jour (startISO === endISO).
 // ---------------------------------------------------------------------------
-async function runExport(page, dumpDebug, kind, wants) {
-  // (re)charge la page du journal pour partir d'un formulaire propre
+async function downloadJournal(page, dumpDebug, kind, wants, startISO, endISO) {
   await page.goto(CFG.base + CFG.journalPath, { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
   await page.waitForTimeout(800);
@@ -471,44 +481,107 @@ async function runExport(page, dumpDebug, kind, wants) {
   }
 
   // Periode via les champs CACHES flatpickr name="start"/"end" (format ISO)
-  const dateSet = await page.evaluate((iso) => {
+  const dateSet = await page.evaluate(({ s0, e0 }) => {
     const s = document.querySelector('input[name="start"]');
     const e = document.querySelector('input[name="end"]');
     if (!s || !e) return { ok: false };
-    for (const el of [s, e]) {
-      el.value = iso;
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    }
+    s.value = s0; e.value = e0;
+    for (const el of [s, e]) { el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }
     return { ok: true, start: s.value, end: e.value };
-  }, targetDate);
+  }, { s0: startISO, e0: endISO });
   log(`[${kind}] periode start/end : ${JSON.stringify(dateSet)}`);
-  if (!dateSet.ok || dateSet.start !== targetDate || dateSet.end !== targetDate) {
+  if (!dateSet.ok || dateSet.start !== startISO || dateSet.end !== endISO) {
     await dumpDebug(`${kind}-dates`);
-    throw new Error(`[${kind}] Periode non reglee sur ${targetDate}. On n'exporte pas.`);
+    throw new Error(`[${kind}] Periode non reglee sur ${startISO}..${endISO}. On n'exporte pas.`);
   }
   await page.waitForTimeout(300);
-  await dumpDebug(`${kind}-form-${targetDate}`);
+  await dumpDebug(`${kind}-form-${startISO}_${endISO}`);
 
-  // Telechargement
   log(`[${kind}] clic sur "Telecharger" …`);
   const btn = page.locator('button[type="submit"]:has-text("Télécharger"), button:has-text("Télécharger")').first();
   const [download] = await Promise.all([
-    page.waitForEvent('download', { timeout: 60000 }),
+    page.waitForEvent('download', { timeout: 120000 }),
     btn.click(),
   ]);
-  const suggested = download.suggestedFilename() || `journal-${targetDate}.csv`;
+  const suggested = download.suggestedFilename() || `journal-${startISO}.csv`;
   const savedPath = path.join(CFG.debugDir, `${kind}-${suggested}`);
   await download.saveAs(savedPath);
   log(`[${kind}] fichier telecharge : ${kind}-${suggested}`);
+  return savedPath;
+}
 
-  // Analyse + garde-fou "periode ignoree"
+// Un export d'UN jour (mode normal) : telechargement + analyse + garde-fou.
+async function runExport(page, dumpDebug, kind, wants) {
+  const savedPath = await downloadJournal(page, dumpDebug, kind, wants, targetDate, targetDate);
   const r = analyseJournal(savedPath, targetFR, kind);
   if (r.totalRows > 0 && r.dayRows === 0) {
     throw new Error(`[${kind}] L'export contient ${r.totalRows} lignes mais AUCUNE du ${targetFR} ` +
       `(dates presentes : ${r.otherDates.slice(0, 5).join(', ')}…). Periode ignoree — rien n'est ecrit.`);
   }
   return r;
+}
+
+// ---------------------------------------------------------------------------
+// 6bis) BACKFILL historique : 2 exports sur toute la plage, decoupes par jour,
+//   ecrits dans le RTDB. DONNEES SEULEMENT (aucun XP/avis Synergia). N'ecrase
+//   PAS les jours deja synchronises (ils gardent leurs avis/detail).
+// ---------------------------------------------------------------------------
+async function runBackfill(page, dumpDebug) {
+  const [start, end] = String(CFG.backfill).split(':');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start || '') || !/^\d{4}-\d{2}-\d{2}$/.test(end || '')) {
+    throw new Error('backfill : format attendu --backfill=YYYY-MM-DD:YYYY-MM-DD');
+  }
+  log(`BACKFILL ${start} → ${end} (données seulement, sans XP/avis Synergia)`);
+  const ventesFile = await downloadJournal(page, dumpDebug, 'bf-ventes', [
+    { key: 'type', match: 'commandes' }, { key: 'dateBase', match: 'date de commande' }, { key: 'statuts', match: 'uniquement paye' },
+  ], start, end);
+  const joueFile = await downloadJournal(page, dumpDebug, 'bf-joue', [
+    { key: 'type', match: 'commandes' }, { key: 'dateBase', match: 'date de prestation' }, { key: 'statuts', match: 'en attente de paiement' },
+  ], start, end);
+
+  const vMap = analyseAllDays(ventesFile, 'ventes');
+  const jMap = analyseAllDays(joueFile, 'joue');
+  const allDates = [...new Set([...vMap.keys(), ...jMap.keys()])].filter((d) => d >= start && d <= end).sort();
+  log(`Backfill : ${allDates.length} jour(s) avec données, du ${allDates[0] || '—'} au ${allDates[allDates.length - 1] || '—'}.`);
+  const r2 = (x) => Math.round(x * 100) / 100;
+  const caOf = (d) => { const v = vMap.get(d) || {}, j = jMap.get(d) || {}; return r2((v.ttc || 0) - (v.caBonsCadeaux || 0) + (j.caBonsCadeaux || 0)); };
+
+  if (CFG.dryRun) {
+    log('DRY-RUN : rien écrit. Aperçu des 6 premiers jours :');
+    for (const d of allDates.slice(0, 6)) { const j = jMap.get(d) || {}; log(`  ${d} : CA ${Math.round(caOf(d))} € · ${j.sessions || 0} sess · ${j.joueurs || 0} joueurs`); }
+    // Totaux par mois pour controle
+    const perMonth = {}; for (const d of allDates) { const mk = d.slice(0, 7); perMonth[mk] = (perMonth[mk] || 0) + caOf(d); }
+    log('CA par mois : ' + Object.entries(perMonth).map(([m, c]) => `${m}=${Math.round(c)}€`).join(' · '));
+    return;
+  }
+
+  await ensureAuth();
+  let existing = {};
+  try { const er = await fetch(rtdbUrl('/state/entries.json')); if (er.ok) existing = (await er.json()) || {}; } catch { /* vide */ }
+  const has = new Set(Object.values(existing).filter((e) => e && e.date).map((e) => e.date));
+
+  let written = 0, skipped = 0;
+  for (const date of allDates) {
+    if (has.has(date)) { skipped++; continue; }               // ne pas ecraser un jour deja synchronise
+    const v = vMap.get(date) || {}, j = jMap.get(date) || {};
+    const entry = {
+      gm: '🤖 4escape (backfill)', date, ca: Math.round(caOf(date)), sessions: j.sessions || 0,
+      options: 0, avis: 0, players: j.joueurs || 0,
+      detail: {
+        vendu: { ttcBrut: v.ttc || 0, ht: v.ht || 0, sessions: v.caSessions || 0, chequesUtilises: v.caBonsCadeaux || 0,
+          produits: v.caProduits || 0, remises: v.remises || 0, nbSessions: v.sessions || 0, nbJoueurs: v.joueurs || 0,
+          nbProduits: v.nbProduits || 0, listeProduits: v.produits || [], listeCodes: v.codes || [] },
+        joue: { caJoue: j.ttc || 0, sessions: j.sessions || 0, joueurs: j.joueurs || 0, chequesAchetes: j.caBonsCadeaux || 0, nbChequesAchetes: j.nbBonsCadeaux || 0 },
+        caEncaisse: caOf(date),
+      },
+      source: 'backfill', ts: Date.now(), syncedAt: new Date().toISOString(),
+    };
+    const res = await fetch(rtdbUrl(`/state/entries/auto-${date}.json`), {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry),
+    });
+    if (res.ok) written++; else log(`⚠️ ${date} : écriture RTDB ${res.status}`);
+  }
+  log(`✅ Backfill terminé : ${written} jour(s) écrit(s), ${skipped} déjà présent(s) (non écrasés).`);
 }
 
 // ---------------------------------------------------------------------------
@@ -573,6 +646,9 @@ async function main() {
     await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
     if (/\/login(\?|$)/.test(page.url())) { await dumpDebug('login-echec'); throw new Error('Connexion echouee (toujours sur /login). Verifie FE_USER / FE_PASS.'); }
     log('Connexion OK. URL :', page.url());
+
+    // --- Mode BACKFILL (historique) : traite toute une plage puis s'arrete ---
+    if (CFG.backfill) { await runBackfill(page, dumpDebug); return; }
 
     // --- EXPORT 1 : "ventes" (CA encaisse, base date de commande) -----------
     const ventes = await runExport(page, dumpDebug, 'ventes', [
