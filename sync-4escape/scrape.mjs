@@ -693,18 +693,24 @@ async function main() {
       throw new Error(`Incoherence comptable export ventes : HT (${ventes.ht}) + TVA (${ventes.tva}) != TTC (${ventes.ttc}). Rien n'est ecrit.`);
     }
 
-    // --- Avis Google (delta vs total memorise) -------------------------------
+    // --- Avis Google : delta vs total memorise, IDEMPOTENT par jour ----------
+    // Le memo retient le JOUR deja attribue. Rejouer ce jour ne perd pas ses
+    // avis (on relit l'existant) et ne les recompte pas (memo/XP inchanges).
     const gr = await fetchReviewsTotal();
-    let avis = 0, avisInfo = null, prevCount = null;
+    let avis = 0, avisInfo = null, avisIsNew = false, memo = null;
     if (gr) {
-      try {
-        await ensureAuth();
-        const pr = await fetch(rtdbUrl('/state/autoMeta/googleReviews.json'));
-        if (pr.ok) { const p = await pr.json(); if (p && typeof p.count === 'number') prevCount = p.count; }
-      } catch { /* premiere fois : pas de memoire */ }
-      if (prevCount != null) avis = Math.max(0, gr.count - prevCount);
-      avisInfo = { totalAvis: gr.count, note: gr.rating, precedent: prevCount, nouveaux: avis, source: gr.source };
-      log(`⭐ Avis Google : total ${gr.count} (note ${gr.rating ?? '—'}) · memorise ${prevCount ?? '— (1re fois)'} · nouveaux du jour = ${avis}`);
+      try { await ensureAuth(); const pr = await fetch(rtdbUrl('/state/autoMeta/googleReviews.json')); if (pr.ok) memo = await pr.json(); } catch { /* 1re fois */ }
+      const prevCount = memo && typeof memo.count === 'number' ? memo.count : null;
+      if (memo && memo.date === targetDate) {
+        // Jour deja attribue : on RELIT l'avis deja enregistre (idempotent).
+        try { const ee = await fetch(rtdbUrl(`/state/entries/auto-${targetDate}.json`)); if (ee.ok) { const e = await ee.json(); if (e && typeof e.avis === 'number') avis = e.avis; } } catch { /* rien */ }
+      } else if (prevCount != null) {
+        avis = Math.max(0, gr.count - prevCount); avisIsNew = true;
+      } else {
+        avisIsNew = true;   // 1re fois : pose la reference, 0 avis attribue
+      }
+      avisInfo = { totalAvis: gr.count, note: gr.rating, precedent: prevCount, nouveaux: avis, source: gr.source, jour: targetDate };
+      log(`⭐ Avis Google : total ${gr.count} (note ${gr.rating ?? '—'}) · memorise ${prevCount ?? '— (1re fois)'} · attribués au ${targetDate} = ${avis}${avisIsNew ? '' : ' (jour déjà compté, inchangé)'}`);
     }
 
     fs.writeFileSync(path.join(CFG.debugDir, 'parsed-preview.json'), JSON.stringify({ targetDate, ventes, joue, avis: avisInfo }, null, 2));
@@ -750,12 +756,12 @@ async function main() {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ date: targetDate, at: new Date().toISOString() }),
       }).catch(() => {});
-      if (gr) {
-        // Memorise le total d'avis pour le calcul du delta de demain (AVANT
-        // l'envoi Synergia -> pas de double credit si l'envoi echoue/rejoue).
+      if (gr && avisIsNew) {
+        // Avance le memo au JOUR attribue (AVANT l'envoi Synergia). Sur un
+        // re-run du meme jour (avisIsNew=false) on n'y touche pas -> pas de perte.
         await fetch(rtdbUrl('/state/autoMeta/googleReviews.json'), {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ count: gr.count, rating: gr.rating, at: new Date().toISOString() }),
+          body: JSON.stringify({ count: gr.count, rating: gr.rating, date: targetDate, at: new Date().toISOString() }),
         }).then((r) => { if (!r.ok) log('⚠️ memo avis non enregistre :', r.status); });
       }
       // --- SYNERGIA : cagnotte d'equipe (paliers CA du mois + nouveaux avis) --
@@ -766,7 +772,7 @@ async function main() {
         if (er.ok) { const all = await er.json();
           caMonth = Object.values(all || {}).filter((e) => e && e.date && e.date.slice(0, 7) === month).reduce((a, e) => a + (e.ca || 0), 0); }
       } catch { /* cumul indispo -> paliers sautes ce tour */ }
-      await pushSynergia({ month, caMonth, nouveauxAvis: avis });
+      await pushSynergia({ month, caMonth, nouveauxAvis: avisIsNew ? avis : 0 });
       // Rafraichit le mini-classement "ventes co" (declare dans Synergia)
       await syncSynergiaVentes().catch((e) => log('⚠️ ventes co :', e.message));
     }
