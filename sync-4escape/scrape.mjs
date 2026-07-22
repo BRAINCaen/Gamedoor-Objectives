@@ -510,14 +510,25 @@ async function runExport(page, dumpDebug, kind, wants) {
 // 7) Programme principal
 // ---------------------------------------------------------------------------
 async function main() {
-  // Fenetre horaire (runs planifies) : deux crons UTC couvrent ete/hiver, seul
-  // celui qui tombe dans la bonne heure de Paris s'execute — l'autre se saute.
-  if (process.env.RUN_WINDOW_HOUR !== undefined && process.env.RUN_WINDOW_HOUR !== '') {
+  // Runs PLANIFIES (SCHEDULED=1) : plusieurs crons UTC couvrent ete/hiver +
+  // rattrapage. Comme GitHub retarde souvent les crons (30 min a 2h), on
+  // n'exige PAS une heure pile : on accepte toute la fenetre 0h-9h de Paris
+  // (= apres minuit, la veille est bien cloturee, avant l'ouverture). L'anti-
+  // doublon (lastSync) empeche de traiter deux fois le meme jour.
+  if (process.env.SCHEDULED === '1') {
     const parisHour = parseInt(new Intl.DateTimeFormat('fr-FR', { timeZone: CFG.tz, hour: 'numeric', hour12: false }).format(new Date()), 10);
-    if (parisHour !== parseInt(process.env.RUN_WINDOW_HOUR, 10)) {
-      log(`Heure de Paris = ${parisHour}h, fenetre attendue = ${process.env.RUN_WINDOW_HOUR}h : ce declenchement se saute (l'autre cron est le bon). Fin normale.`);
+    if (parisHour >= 9) {
+      log(`Heure de Paris = ${parisHour}h (hors fenetre 0h-9h) : run planifie sauté.`);
       return;
     }
+    await ensureAuth();
+    try {
+      const r = await fetch(rtdbUrl('/state/autoMeta/lastSync.json'));
+      if (r.ok) { const ls = await r.json(); if (ls && ls.date === targetDate) {
+        log(`Déjà synchronisé pour ${targetDate} (le ${ls.at}) : run planifié sauté (anti-doublon).`);
+        return;
+      } }
+    } catch { /* pas de marqueur -> on continue */ }
   }
   log(`Robot 4escape (Journal des ventes ×2) · jour cible = ${targetDate} (${targetFR})`);
   if (!CFG.user || !CFG.pass) { fail('Identifiants manquants : definis FE_USER et FE_PASS.'); return; }
@@ -652,6 +663,11 @@ async function main() {
     else {
       await writeToFirebase(entry);
       log(`✅ Ecrit dans Firebase : state/entries/auto-${targetDate}`);
+      // Marqueur anti-doublon pour les runs planifies (voir garde-fou en tete)
+      await fetch(rtdbUrl('/state/autoMeta/lastSync.json'), {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: targetDate, at: new Date().toISOString() }),
+      }).catch(() => {});
       if (gr) {
         // Memorise le total d'avis pour le calcul du delta de demain (AVANT
         // l'envoi Synergia -> pas de double credit si l'envoi echoue/rejoue).

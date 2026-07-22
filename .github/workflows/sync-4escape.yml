@@ -5,12 +5,12 @@ name: Synchro 4escape -> Gamedoor
 
 on:
   schedule:
-    # Objectif : ~00h30 heure de Paris toute l'annee. Les crons GitHub sont en
-    # UTC : 22:33 UTC = 00:33 Paris en ETE, 23:33 UTC = 00:33 Paris en HIVER.
-    # Les DEUX sont programmes ; le script verifie l'heure de Paris (RUN_WINDOW_HOUR)
-    # et seul le declenchement qui tombe dans l'heure 00h-01h s'execute.
-    - cron: '33 22 * * *'
-    - cron: '33 23 * * *'
+    # Cible ~00h30 Paris (crons GitHub en UTC). GitHub RETARDE souvent les crons
+    # de 30 min a 2h : le script accepte donc toute la fenetre 0h-9h de Paris et
+    # dedoublonne via lastSync. Plusieurs declenchements pour la redondance :
+    - cron: '33 22 * * *'   # 00:33 Paris (ete) / 23:33 (hiver, hors fenetre -> saute)
+    - cron: '33 23 * * *'   # 01:33 Paris (ete) / 00:33 (hiver)
+    - cron: '33 4 * * *'    # rattrapage matin : 06:33 (ete) / 05:33 (hiver)
   workflow_dispatch:
     inputs:
       target_date:
@@ -68,8 +68,8 @@ jobs:
           TZ:           'Europe/Paris'
           TARGET_DATE:  ${{ github.event.inputs.target_date || '' }}
           DRY_RUN:      ${{ github.event.inputs.dry_run     || '0' }}
-          # Sur les runs planifies uniquement : n'agir que si l'heure de Paris est 00h-01h
-          RUN_WINDOW_HOUR: ${{ github.event_name == 'schedule' && '0' || '' }}
+          # '1' sur les runs planifies -> fenetre 0h-9h Paris + anti-doublon.
+          SCHEDULED: ${{ github.event_name == 'schedule' && '1' || '' }}
         run: node scrape.mjs
 
       - name: Upload debug artifacts
