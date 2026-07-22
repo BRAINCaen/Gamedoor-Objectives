@@ -206,6 +206,16 @@
   .ct-delta.up{color:var(--green);background:rgba(74,222,128,.13)}
   .ct-delta.down{color:var(--red);background:rgba(248,113,113,.13)}
   .ct-delta.flat{color:var(--mute);background:var(--bg-elev)}
+  .multi-tbl{width:100%;border-collapse:collapse;font-size:15px;min-width:560px}
+  .multi-tbl th{text-align:right;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);font-weight:800;padding:10px 12px;border-bottom:1px solid var(--line-s)}
+  .multi-tbl th:first-child{text-align:left}
+  .multi-tbl td{text-align:right;padding:13px 12px;border-bottom:1px solid var(--line);font-family:'JetBrains Mono';font-weight:600;color:var(--soft)}
+  .multi-tbl td:first-child{text-align:left;font-family:'Bebas Neue';font-size:24px;letter-spacing:.03em;color:var(--ink)}
+  .multi-tbl td.ca{color:var(--gold-br);font-weight:700;font-size:17px}
+  .multi-tbl tr.best td{background:rgba(232,177,74,.09)}
+  .multi-tbl tr.best td:first-child::after{content:' 🏆';font-size:14px}
+  .multi-insight{font-size:14px;color:var(--soft);margin-top:14px;font-weight:600}
+  .multi-insight b{color:var(--gold)}
   .codes-toggle{color:var(--gold);font-weight:800;cursor:pointer;user-select:none}
   .codes-detail{padding:8px 0 8px 20px}
   .codes-detail .code-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--soft);padding:4px 0;border-bottom:1px solid var(--line)}
@@ -334,6 +344,22 @@
     </div>
     <div class="cmp-period" id="cmpPeriod">—</div>
     <div class="cmp-grid" id="cmpGrid"></div>
+  </div>
+
+  <div class="card" id="multiCard" style="margin-bottom:22px">
+    <h2>🔭 Analyse par période — toutes les années</h2>
+    <div class="card-sub">Choisis une plage (ex. les 2 dernières semaines de juillet) et compare chaque année</div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px">
+      <div class="field" style="margin:0"><label>Du</label><input type="date" id="mDebut" onchange="renderMulti()"></div>
+      <div class="field" style="margin:0"><label>Au</label><input type="date" id="mFin" onchange="renderMulti()"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="cmp-tab" style="padding:9px 16px;font-size:14px" onclick="mPreset('q1')">1re quinzaine</button>
+        <button class="cmp-tab" style="padding:9px 16px;font-size:14px" onclick="mPreset('q2')">2e quinzaine</button>
+        <button class="cmp-tab" style="padding:9px 16px;font-size:14px" onclick="mPreset('mois')">Tout le mois</button>
+      </div>
+    </div>
+    <div id="multiBody" style="overflow-x:auto"></div>
+    <div class="multi-insight" id="multiInsight"></div>
   </div>
 
   <div class="cols">
@@ -674,6 +700,37 @@ function renderCompare(){
   }).join('');
 }
 function toggleCodes(){const d=document.getElementById('codesDetail'),t=document.getElementById('codesTog');if(!d)return;const open=d.style.display==='none';d.style.display=open?'block':'none';if(t)t.textContent=open?'－':'＋';}
+
+/* ---- Analyse multi-années sur une plage libre (même MM-JJ chaque année) ---- */
+function cmpAnchorDate(){const ds=state.entries.filter(e=>e.date).map(e=>e.date).sort();return ds.length?ymdToDate(ds[ds.length-1]):new Date();}
+function mPreset(which){
+  const A=cmpAnchorDate(),y=A.getFullYear(),mo=A.getMonth(),last=new Date(y,mo+1,0).getDate();
+  let s,e;
+  if(which==='q1'){s=new Date(y,mo,1);e=new Date(y,mo,15);}
+  else if(which==='q2'){s=new Date(y,mo,16);e=new Date(y,mo,last);}
+  else{s=new Date(y,mo,1);e=new Date(y,mo,last);}
+  document.getElementById('mDebut').value=ymd(s);document.getElementById('mFin').value=ymd(e);
+  renderMulti();
+}
+function renderMulti(){
+  const body=document.getElementById('multiBody'),ins=document.getElementById('multiInsight');if(!body)return;
+  let ds=document.getElementById('mDebut').value,de=document.getElementById('mFin').value;
+  if(!ds||!de){const A=cmpAnchorDate();ds=ymd(new Date(A.getFullYear(),A.getMonth(),16));de=ymd(new Date(A.getFullYear(),A.getMonth()+1,0));
+    document.getElementById('mDebut').value=ds;document.getElementById('mFin').value=de;}
+  const sMD=ds.slice(5),eMD=de.slice(5),wrap=eMD<sMD;                    // plage qui chevauche l'annee (ex. 12-20 -> 01-05)
+  const years=[...new Set(state.entries.filter(e=>e.date).map(e=>e.date.slice(0,4)))].sort().reverse();
+  const rows=years.map(y=>{const s=y+'-'+sMD,e=(wrap?(Number(y)+1):Number(y))+'-'+eMD;return Object.assign({y},periodAgg(s,e));}).filter(r=>r.days>0);
+  if(!rows.length){body.innerHTML='<div class="log-empty">Aucune donnée sur cette plage.</div>';ins.textContent='';return;}
+  const maxCa=Math.max(...rows.map(r=>r.ca));
+  const jour=(mmjj)=>{const[m,d]=mmjj.split('-');return d+' '+MONTHS[parseInt(m,10)-1];};
+  body.innerHTML='<table class="multi-tbl"><thead><tr><th>Année</th><th>CA encaissé</th><th>Panier</th><th>Sessions</th><th>Joueurs</th><th>Jours</th></tr></thead><tbody>'+
+    rows.map(r=>'<tr class="'+(r.ca===maxCa?'best':'')+'"><td>'+r.y+'</td><td class="ca">'+fmt(r.ca)+' €</td><td>'+fmt(r.panier)+' €</td><td>'+fmt(r.sessions)+'</td><td>'+fmt(r.joueurs)+'</td><td>'+r.days+'</td></tr>').join('')+
+    '</tbody></table>';
+  const best=rows.find(r=>r.ca===maxCa);
+  const moy=Math.round(rows.reduce((a,r)=>a+r.ca,0)/rows.length);
+  ins.innerHTML='Plage <b>'+jour(sMD)+' → '+jour(eMD)+'</b> · meilleure année : <b>'+best.y+'</b> ('+fmt(best.ca)+' €) · moyenne '+fmt(moy)+' € sur '+rows.length+' ans';
+}
+
 if(typeof window!=='undefined')window.__computePeriods=computePeriods;
 
 const BADGE_DEFS=[
@@ -833,6 +890,7 @@ function render(){
     return '<div class="log-row"><div class="log-gm">'+avatarOf(e.gm)+' '+esc(e.gm)+'</div><div class="log-meta">'+d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+' · '+e.sessions+' sess · '+e.avis+'★</div><div class="log-ca">'+fmt(e.ca)+' €</div></div>';}).join('');}
 
   renderCompare();
+  renderMulti();
 }
 function setGauge(valId,val,barId,pct,cls){const v=document.getElementById(valId);v.textContent=val;v.className='kpi-val '+cls;document.getElementById(barId).style.width=Math.max(0,Math.min(100,pct))+'%';}
 
