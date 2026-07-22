@@ -126,7 +126,7 @@ function analyseJournal(filePath, dayFR, mode = 'ventes') {
   const aoa = readExport(filePath).filter((r) => r.some((c) => String(c).trim() !== ''));
   const empty = { headers: [], totalRows: 0, dayRows: 0, otherDates: [], ttc: 0, ht: 0, tva: 0,
     sessions: 0, joueurs: 0, caSessions: 0, caBonsCadeaux: 0, caProduits: 0, remises: 0,
-    nbBonsCadeaux: 0, nbProduits: 0, produits: [] };
+    nbBonsCadeaux: 0, nbProduits: 0, produits: [], codes: [] };
   if (!aoa.length) return empty;
 
   const headers = aoa[0].map((h) => String(h).trim());
@@ -152,7 +152,7 @@ function analyseJournal(filePath, dayFR, mode = 'ventes') {
   let ttc = 0, ht = 0, tva = 0;
   let caSessions = 0, caBonsCadeaux = 0, caProduits = 0, remises = 0;
   let nbBonsCadeaux = 0, nbProduits = 0, joueurs = 0;
-  const sess = new Set(); const produits = new Map();
+  const sess = new Set(); const produits = new Map(); const codes = new Map();
 
   for (const r of dayRows) {
     const cpt = String(r[iCpt]).trim();
@@ -187,7 +187,11 @@ function analyseJournal(filePath, dayFR, mode = 'ventes') {
     // Ils REDUISENT ce que paie le client — jamais comptes comme du CA.
     if (cpt.startsWith('709') || cat.includes('vouchers') || cat.includes('remise')) {
       const m = numFR(r[iDeb]) - numFR(r[iCred]);
-      ht -= m; remises += ttcOf(m); continue;
+      const mttc = ttcOf(m);
+      ht -= m; remises += mttc;
+      const label = ((iProd >= 0 ? String(r[iProd]) : '') || 'Code / remise').trim().slice(0, 60);
+      codes.set(label, (codes.get(label) || 0) + mttc);
+      continue;
     }
     if (!cpt.startsWith('70')) continue;               // autres comptes : ignores
     const m = numFR(r[iCred]) - numFR(r[iDeb]);        // ligne de vente HT
@@ -225,6 +229,7 @@ function analyseJournal(filePath, dayFR, mode = 'ventes') {
     caSessions: r2(caSessions), caBonsCadeaux: r2(caBonsCadeaux), caProduits: r2(caProduits), remises: r2(remises),
     nbBonsCadeaux: Math.round(nbBonsCadeaux), nbProduits: Math.round(nbProduits),
     produits: [...produits.entries()].slice(0, 10).map(([n, q]) => `${q}× ${n}`),
+    codes: [...codes.entries()].map(([label, montant]) => ({ label, montant: r2(montant) })).sort((a, b) => b.montant - a.montant).slice(0, 20),
   };
 }
 
@@ -645,6 +650,7 @@ async function main() {
           produits: ventes.caProduits, remises: ventes.remises,
           nbSessions: ventes.sessions, nbJoueurs: ventes.joueurs,
           nbProduits: ventes.nbProduits, listeProduits: ventes.produits,
+          listeCodes: ventes.codes,
         },
         joue: {
           caJoue: joue.ttc, sessions: joue.sessions, joueurs: joue.joueurs,

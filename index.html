@@ -189,6 +189,27 @@
   .modal .mini{font-size:11px;color:var(--mute);margin-top:12px;line-height:1.5}
   .pin-input{text-align:center;font-family:'JetBrains Mono';font-size:28px;letter-spacing:.4em}
   .modal-err{color:var(--red);font-size:12px;font-weight:700;margin-top:8px;min-height:16px}
+
+  /* ===== COMPARAISON N / N-1 (grand écran salle de pause) ===== */
+  .cmp-tabs{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+  .cmp-tab{background:var(--bg-card);border:1px solid var(--line-s);color:var(--soft);border-radius:11px;padding:13px 26px;font-family:'Manrope';font-size:17px;font-weight:800;cursor:pointer;transition:all .18s}
+  .cmp-tab:hover{border-color:var(--gold);color:var(--gold)}
+  .cmp-tab.active{background:linear-gradient(135deg,var(--gold),var(--gold-br));color:var(--bg-deep);border-color:var(--gold-br);box-shadow:0 8px 22px -10px rgba(232,177,74,.6)}
+  .cmp-period{font-size:15px;color:var(--soft);margin-bottom:18px;font-weight:600}
+  .cmp-period b{color:var(--gold)}
+  .cmp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px}
+  .cmp-tile{background:var(--bg-card);border:1px solid var(--line);border-radius:16px;padding:22px}
+  .cmp-tile .ct-name{font-size:13px;text-transform:uppercase;letter-spacing:.09em;color:var(--mute);font-weight:800;margin-bottom:12px}
+  .cmp-tile .ct-val{font-family:'Bebas Neue';font-size:clamp(44px,5vw,60px);line-height:.85;color:var(--ink)}
+  .cmp-tile .ct-prev{font-size:15px;color:var(--soft);margin-top:12px;font-weight:600}
+  .cmp-tile .ct-delta{display:inline-flex;align-items:center;gap:6px;font-size:18px;font-weight:800;padding:6px 15px;border-radius:22px;margin-top:12px}
+  .ct-delta.up{color:var(--green);background:rgba(74,222,128,.13)}
+  .ct-delta.down{color:var(--red);background:rgba(248,113,113,.13)}
+  .ct-delta.flat{color:var(--mute);background:var(--bg-elev)}
+  .codes-toggle{color:var(--gold);font-weight:800;cursor:pointer;user-select:none}
+  .codes-detail{padding:8px 0 8px 20px}
+  .codes-detail .code-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--soft);padding:4px 0;border-bottom:1px solid var(--line)}
+  .codes-detail .code-row:last-child{border-bottom:none}
 </style>
 </head>
 <body>
@@ -299,6 +320,20 @@
       <div class="kpi-track"><div class="kpi-bar p" id="kJoueursBar"></div></div>
       <div class="kpi-sub" id="kJoueursSub">En attente de synchro</div>
     </div>
+  </div>
+
+  <div class="card" id="cmpCard" style="margin-bottom:22px">
+    <h2>📊 Comparaison N / N‑1</h2>
+    <div class="card-sub">Même période l'an dernier · le « jour » compare au même jour de semaine</div>
+    <div class="cmp-tabs" id="cmpTabs">
+      <button class="cmp-tab active" data-tab="jour" onclick="setCmpTab(this)">Jour</button>
+      <button class="cmp-tab" data-tab="semaine" onclick="setCmpTab(this)">Semaine</button>
+      <button class="cmp-tab" data-tab="mois" onclick="setCmpTab(this)">Mois</button>
+      <button class="cmp-tab" data-tab="trimestre" onclick="setCmpTab(this)">Trimestre</button>
+      <button class="cmp-tab" data-tab="annee" onclick="setCmpTab(this)">Année</button>
+    </div>
+    <div class="cmp-period" id="cmpPeriod">—</div>
+    <div class="cmp-grid" id="cmpGrid"></div>
   </div>
 
   <div class="cols">
@@ -567,6 +602,80 @@ function tierOf(ca){const ts=[state.config.targetBronze,state.config.targetArgen
 // Derniere journee synchronisee : la date de saisie la plus recente du mois
 function latestDay(){const ds=[...new Set(monthEntries().map(e=>e.date))].sort();return ds.length?ds[ds.length-1]:null;}
 
+/* ============================================================
+   COMPARAISON N / N-1 (onglets jour / semaine / mois / trim / annee)
+   Regle cle : le "jour" et la "semaine" se comparent au MEME JOUR DE
+   SEMAINE de l'an dernier -> decalage de 364 jours (= 52 semaines pile),
+   qui retombe toujours sur le meme jour. Mois/trim/annee = cumul calendaire
+   (meme portion ecoulee : du 1er jusqu'au jour equivalent l'an dernier).
+   ============================================================ */
+let CMP_TAB='jour';
+function ymdToDate(s){return new Date(s+'T00:00');}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x;}
+function computePeriods(anchor,tab){
+  const D=anchor; let cs,ce,ps,pe,label,prevLabel;
+  const fD=(x,o)=>x.toLocaleDateString('fr-FR',o);
+  if(tab==='jour'){
+    cs=ce=D; const p=addDays(D,-364); ps=pe=p;
+    label=fD(D,{weekday:'long',day:'numeric',month:'long'});
+    prevLabel='vs '+fD(p,{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  }else if(tab==='semaine'){
+    const dow=(D.getDay()+6)%7, mon=addDays(D,-dow);
+    cs=mon; ce=D; ps=addDays(mon,-364); pe=addDays(D,-364);
+    label='semaine du '+fD(mon,{day:'numeric',month:'long'})+' (jusqu\'à '+fD(D,{weekday:'long'})+')';
+    prevLabel='vs même semaine '+ps.getFullYear();
+  }else if(tab==='mois'){
+    cs=new Date(D.getFullYear(),D.getMonth(),1); ce=D;
+    ps=new Date(D.getFullYear()-1,D.getMonth(),1); pe=new Date(D.getFullYear()-1,D.getMonth(),D.getDate());
+    label=fD(D,{month:'long',year:'numeric'})+' (cumul au '+D.getDate()+')';
+    prevLabel='vs '+fD(ps,{month:'long',year:'numeric'})+' (même portion)';
+  }else if(tab==='trimestre'){
+    const q=Math.floor(D.getMonth()/3), qm=q*3;
+    cs=new Date(D.getFullYear(),qm,1); ce=D;
+    ps=new Date(D.getFullYear()-1,qm,1); pe=new Date(D.getFullYear()-1,D.getMonth(),D.getDate());
+    label='T'+(q+1)+' '+D.getFullYear()+' (cumul)';
+    prevLabel='vs T'+(q+1)+' '+(D.getFullYear()-1)+' (même portion)';
+  }else{ // annee
+    cs=new Date(D.getFullYear(),0,1); ce=D;
+    ps=new Date(D.getFullYear()-1,0,1); pe=new Date(D.getFullYear()-1,D.getMonth(),D.getDate());
+    label='Année '+D.getFullYear()+' (cumul au '+fD(D,{day:'numeric',month:'long'})+')';
+    prevLabel='vs '+(D.getFullYear()-1)+' (même portion)';
+  }
+  return {curStart:ymd(cs),curEnd:ymd(ce),prevStart:ymd(ps),prevEnd:ymd(pe),label,prevLabel};
+}
+function periodAgg(startYMD,endYMD){
+  const es=state.entries.filter(e=>e.ca!=null&&e.date>=startYMD&&e.date<=endYMD);
+  const ca=sum(es,e=>e.ca),ses=sum(es,e=>e.sessions),jo=sum(es,e=>e.players),av=sum(es,e=>e.avis);
+  return {ca,sessions:ses,joueurs:jo,avis:av,days:es.length,panier:ses>0?ca/ses:0};
+}
+function setCmpTab(btn){CMP_TAB=btn.dataset.tab;[...document.querySelectorAll('.cmp-tab')].forEach(b=>b.classList.toggle('active',b===btn));renderCompare();}
+function renderCompare(){
+  const grid=document.getElementById('cmpGrid'); if(!grid)return;
+  const allDates=state.entries.filter(e=>e.date).map(e=>e.date).sort();
+  const anchorYMD=allDates.length?allDates[allDates.length-1]:todayStr();
+  const P=computePeriods(ymdToDate(anchorYMD),CMP_TAB);
+  document.getElementById('cmpPeriod').innerHTML='📅 <b>'+P.label+'</b> &nbsp;·&nbsp; '+P.prevLabel;
+  const cur=periodAgg(P.curStart,P.curEnd), prev=periodAgg(P.prevStart,P.prevEnd);
+  const hasPrev=prev.days>0;
+  const metrics=[
+    {name:'CA encaissé',cur:cur.ca,prev:prev.ca,f:v=>fmt(v)+' €'},
+    {name:'Panier moyen',cur:cur.panier,prev:prev.panier,f:v=>fmt(v)+' €'},
+    {name:'Sessions jouées',cur:cur.sessions,prev:prev.sessions,f:v=>fmt(v)},
+    {name:'Joueurs',cur:cur.joueurs,prev:prev.joueurs,f:v=>fmt(v)},
+    {name:'Avis Google',cur:cur.avis,prev:prev.avis,f:v=>fmt(v)},
+  ];
+  grid.innerHTML=metrics.map(m=>{
+    let delta;
+    if(!hasPrev||m.prev===0){delta='<div class="ct-delta flat">— N‑1 indispo</div>';}
+    else{const pct=Math.round((m.cur-m.prev)/m.prev*100);const cls=pct>0?'up':pct<0?'down':'flat';const ar=pct>0?'▲':pct<0?'▼':'▬';
+      delta='<div class="ct-delta '+cls+'">'+ar+' '+(pct>0?'+':'')+pct+' %</div>';}
+    return '<div class="cmp-tile"><div class="ct-name">'+m.name+'</div><div class="ct-val">'+m.f(m.cur)+'</div>'+
+      '<div class="ct-prev">N‑1 : '+(hasPrev?m.f(m.prev):'—')+'</div>'+delta+'</div>';
+  }).join('');
+}
+function toggleCodes(){const d=document.getElementById('codesDetail'),t=document.getElementById('codesTog');if(!d)return;const open=d.style.display==='none';d.style.display=open?'block':'none';if(t)t.textContent=open?'－':'＋';}
+if(typeof window!=='undefined')window.__computePeriods=computePeriods;
+
 const BADGE_DEFS=[
   {id:'ca50',ic:'🥉',name:'Premier palier',desc:'Objectif Bronze atteint',test:m=>m.ca>=state.config.targetBronze},
   {id:'caGoal',ic:'🥇',name:'Médaille d\'Or',desc:'Objectif Or atteint',test:m=>m.ca>=state.config.targetOr},
@@ -645,18 +754,24 @@ function render(){
   const lastAuto=te.find(e=>e.detail&&e.detail.vendu);
   if(!lastAuto){sd.className='log-empty';sd.textContent='En attente de la première synchro…';}
   else{const d=lastAuto.detail,v=d.vendu||{},j=d.joue||{},euro=(x)=>fmt(x||0)+' €';
-    const rows=[
-      ['💰 Ventes du jour (brut)',euro(v.ttcBrut)],
-      ['🎫 dont sessions vendues',euro(v.sessions)+' ('+(v.nbSessions||0)+')'],
-      ['🎁 Chèques cadeaux achetés','+'+euro(j.chequesAchetes)+' ('+(j.nbChequesAchetes||0)+')'],
-      ['💳 Chèques utilisés en paiement','−'+euro(v.chequesUtilises)+' ('+(v.nbChequesUtilises||0)+')'],
-      ['🛍️ Autres produits',euro(v.produits)+(v.listeProduits&&v.listeProduits.length?' · '+esc(v.listeProduits.join(', ')):'')],
-      ['🏷️ Remises / codes appliqués','−'+euro(v.remises)],
-      ['🎮 Sessions jouées',(j.sessions||0)+' · '+(j.joueurs||0)+' joueurs'],
-      ['⭐ Avis Google',(d.avisGoogle?('total '+d.avisGoogle.totalAvis+' · note '+(d.avisGoogle.note||'—')+' · +'+(d.avisGoogle.nouveaux||0)+' ce jour'):'—')],
-    ];
+    const line=(lab,val)=>'<div class="log-row"><div class="log-gm">'+lab+'</div><div class="log-ca" style="font-size:13px">'+val+'</div></div>';
+    const codes=v.listeCodes||[];
+    let remisesBlock;
+    if(codes.length){
+      remisesBlock='<div class="log-row" style="cursor:pointer" onclick="toggleCodes()"><div class="log-gm">🏷️ Remises / codes appliqués <span class="codes-toggle" id="codesTog">＋</span></div><div class="log-ca" style="font-size:13px">−'+euro(v.remises)+'</div></div>'+
+        '<div class="codes-detail" id="codesDetail" style="display:none">'+
+        codes.map(c=>'<div class="code-row"><span>'+esc(c.label)+'</span><span class="mono">−'+euro(c.montant)+'</span></div>').join('')+'</div>';
+    }else{remisesBlock=line('🏷️ Remises / codes appliqués','−'+euro(v.remises));}
     sd.className='';
-    sd.innerHTML=rows.map(r=>'<div class="log-row"><div class="log-gm">'+r[0]+'</div><div class="log-ca" style="font-size:13px">'+r[1]+'</div></div>').join('');}
+    sd.innerHTML=
+      line('💰 Ventes du jour (brut)',euro(v.ttcBrut))+
+      line('🎫 dont sessions vendues',euro(v.sessions)+' ('+(v.nbSessions||0)+')')+
+      line('🎁 Chèques cadeaux achetés','+'+euro(j.chequesAchetes)+' ('+(j.nbChequesAchetes||0)+')')+
+      line('💳 Chèques utilisés en paiement','−'+euro(v.chequesUtilises)+' ('+(v.nbChequesUtilises||0)+')')+
+      line('🛍️ Autres produits',euro(v.produits)+(v.listeProduits&&v.listeProduits.length?' · '+esc(v.listeProduits.join(', ')):''))+
+      remisesBlock+
+      line('🎮 Sessions jouées',(j.sessions||0)+' · '+(j.joueurs||0)+' joueurs')+
+      line('⭐ Avis Google',(d.avisGoogle?('total '+d.avisGoogle.totalAvis+' · note '+(d.avisGoogle.note||'—')+' · +'+(d.avisGoogle.nouveaux||0)+' ce jour'):'—'));}
 
   // Semaine derniere (lundi -> dimanche precedents) + comparaison
   const now=new Date(); const dow=(now.getDay()+6)%7;             // 0 = lundi
@@ -716,6 +831,8 @@ function render(){
   if(sorted.length===0){log.innerHTML='<div class="log-empty">Pas encore de saisie ce mois.</div>';}
   else{log.innerHTML=sorted.map(e=>{const d=new Date(e.date+'T00:00');
     return '<div class="log-row"><div class="log-gm">'+avatarOf(e.gm)+' '+esc(e.gm)+'</div><div class="log-meta">'+d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+' · '+e.sessions+' sess · '+e.avis+'★</div><div class="log-ca">'+fmt(e.ca)+' €</div></div>';}).join('');}
+
+  renderCompare();
 }
 function setGauge(valId,val,barId,pct,cls){const v=document.getElementById(valId);v.textContent=val;v.className='kpi-val '+cls;document.getElementById(barId).style.width=Math.max(0,Math.min(100,pct))+'%';}
 
