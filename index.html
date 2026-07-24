@@ -820,7 +820,7 @@ const BADGE_DEFS=[
 /* ============================================================
    RENDER
    ============================================================ */
-function afterState(){ if(!ready)return; if(!rolloverDone){rolloverDone=true; autoRollover();} render(); }
+function afterState(){ if(!ready)return; if(!rolloverDone){rolloverDone=true; autoRollover();} render(); bindSettingsValues(); bindObjUI(); }
 
 function render(){
   const C=state.config;
@@ -985,7 +985,7 @@ function bindSettings(){
 function bindObjUI(){
   const C=state.config;
   const set=(id,val)=>{const el=document.getElementById(id); if(el&&document.activeElement!==el) el.value=val;};
-  const on=document.getElementById('objOn'); if(on){on.checked=!!C.autoOn; on.onchange=()=>{C.autoOn=on.checked; writeConfig(); if(C.autoOn)autoRollover(); render(); renderObjPreview();};}
+  const on=document.getElementById('objOn'); if(on){ if(document.activeElement!==on) on.checked=!!C.autoOn; on.onchange=()=>{C.autoOn=on.checked; writeConfig(); if(C.autoOn)autoRollover(); render(); renderObjPreview();};}
   set('objYear',C.objYear); set('objRefCA',Math.round(C.refCA||0));
   set('gB',C.gBronze); set('gA',C.gArgent); set('gO',C.gOr); set('gP',C.gPlatine);
   const sl=document.getElementById('objSeasonLabel'); if(sl) sl.textContent=C.seasonLabel||'saisonnalité 2025';
