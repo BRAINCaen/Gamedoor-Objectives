@@ -498,7 +498,7 @@ const AVATARS=['🎮','🕹️','🧩','🔦','🕵️','🦸','🧙','🐉','�
 const SEASONALITY_2025=[0.0851,0.0845,0.0689,0.0894,0.0673,0.0568,0.0862,0.0988,0.0586,0.1171,0.0772,0.1101];
 const DEFAULT_CFG={targetBronze:27000,targetArgent:30000,targetOr:33000,targetPlatine:36000,targetAvis:30,openDays:26,panierTarget:104,
   /* ---- objectifs automatiques (calculés par saisonnalité) ---- */
-  autoOn:false, objYear:2027, refCA:322641,
+  autoOn:false, objYear:new Date().getFullYear(), refCA:322641,
   gBronze:0, gArgent:5, gOr:8.5, gPlatine:12,
   season:SEASONALITY_2025, seasonLabel:'saisonnalité 2025 (Excel)'};
 const DEFAULT_ROSTER=[{name:'Game Master 1',avatar:'🎮'},{name:'Game Master 2',avatar:'🕹️'},{name:'Game Master 3',avatar:'🧩'},{name:'Game Master 4',avatar:'🔦'}];
@@ -694,7 +694,7 @@ let rolloverDone=false;
 function autoRollover(){
   const C=state.config; if(!C.autoOn) return;
   const curY=new Date().getFullYear();
-  if((C.objYear||0)<curY){
+  if((C.objYear||0)!==curY){
     const y=yearAgg(curY-1);
     if(y.ca>0){C.refCA=Math.round(y.ca); if(y.season)C.season=y.season; C.seasonLabel='données '+(curY-1)+' (auto)';}
     C.objYear=curY; writeConfig();
@@ -985,7 +985,7 @@ function bindSettings(){
 function bindObjUI(){
   const C=state.config;
   const set=(id,val)=>{const el=document.getElementById(id); if(el&&document.activeElement!==el) el.value=val;};
-  const on=document.getElementById('objOn'); if(on){on.checked=!!C.autoOn; on.onchange=()=>{C.autoOn=on.checked; writeConfig(); render(); renderObjPreview();};}
+  const on=document.getElementById('objOn'); if(on){on.checked=!!C.autoOn; on.onchange=()=>{C.autoOn=on.checked; writeConfig(); if(C.autoOn)autoRollover(); render(); renderObjPreview();};}
   set('objYear',C.objYear); set('objRefCA',Math.round(C.refCA||0));
   set('gB',C.gBronze); set('gA',C.gArgent); set('gO',C.gOr); set('gP',C.gPlatine);
   const sl=document.getElementById('objSeasonLabel'); if(sl) sl.textContent=C.seasonLabel||'saisonnalité 2025';
