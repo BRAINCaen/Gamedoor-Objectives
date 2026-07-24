@@ -440,6 +440,26 @@
         <div class="field"><label>Objectif avis Google / mois</label><input type="number" id="setTargetAvis" min="0" step="1"><div class="hint">Note visée ≥ 4,8</div></div>
         <div class="field"><label>Jours d'ouverture / mois</label><input type="number" id="setOpenDays" min="1" step="1"><div class="hint">Pour l'objectif du jour</div></div>
       </div>
+      <div style="height:1px;background:var(--line);margin:18px 0"></div>
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);font-weight:800;margin:2px 0 10px">🎯 Objectifs automatiques (calcul par saisonnalité)</div>
+      <label style="display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;margin-bottom:12px;cursor:pointer">
+        <input type="checkbox" id="objOn" style="width:auto"> Activer le calcul automatique des paliers <span style="color:var(--mute);font-weight:500">(remplace les montants fixes ci-dessus)</span>
+      </label>
+      <div class="set-grid">
+        <div class="field"><label>Année des objectifs</label><input type="number" id="objYear" min="2024" step="1"><div class="hint">Ex. 2027</div></div>
+        <div class="field"><label>CA de référence (€)</label><input type="number" id="objRefCA" min="0" step="1000"><div class="hint" id="objSeasonLabel">saisonnalité 2025</div></div>
+        <div class="field" style="display:flex;flex-direction:column;justify-content:flex-end"><button class="btn btn-ghost btn-sm" onclick="autoFromData()">📥 Récupérer depuis les données</button><div class="hint">CA + saisonnalité de l'année précédente</div></div>
+      </div>
+      <div class="set-grid" style="margin-top:2px">
+        <div class="field"><label>🥉 Bronze · croissance %</label><input type="number" id="gB" step="0.5"><div class="hint">0 = reconduction</div></div>
+        <div class="field"><label>🥈 Argent · croissance %</label><input type="number" id="gA" step="0.5"><div class="hint">Objectif classique</div></div>
+        <div class="field"><label>🥇 Or · croissance %</label><input type="number" id="gO" step="0.5"><div class="hint">Ton objectif principal</div></div>
+      </div>
+      <div class="set-grid" style="margin-top:2px">
+        <div class="field"><label>💎 Platine · croissance %</label><input type="number" id="gP" step="0.5"><div class="hint">Dépassement</div></div>
+      </div>
+      <div id="objPreview" style="background:var(--bg-card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-top:6px;font-size:13px;color:var(--soft)">—</div>
+      <div style="height:1px;background:var(--line);margin:18px 0"></div>
       <div class="set-actions">
         <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ Exporter (CSV)</button>
         <button class="btn btn-ghost btn-sm" onclick="resetMonth()">↺ Nouveau mois</button>
@@ -474,7 +494,13 @@ let TEAM_PIN = "4141";  // code d'équipe — change-le ici si tu veux
 /* ---- constantes ---- */
 const LKEY='gamedoor_sync_v1';       // stockage local (mode local + prefs device)
 const AVATARS=['🎮','🕹️','🧩','🔦','🕵️','🦸','🧙','🐉','👾','🎩','🦊','🚀','🐺','🦉','⚡'];
-const DEFAULT_CFG={targetBronze:27000,targetArgent:30000,targetOr:33000,targetPlatine:36000,targetAvis:30,openDays:26,panierTarget:104};
+/* Saisonnalité 2025 (parts mensuelles du CA global, source Excel « CA PAR ACTI ») */
+const SEASONALITY_2025=[0.0851,0.0845,0.0689,0.0894,0.0673,0.0568,0.0862,0.0988,0.0586,0.1171,0.0772,0.1101];
+const DEFAULT_CFG={targetBronze:27000,targetArgent:30000,targetOr:33000,targetPlatine:36000,targetAvis:30,openDays:26,panierTarget:104,
+  /* ---- objectifs automatiques (calculés par saisonnalité) ---- */
+  autoOn:false, objYear:2027, refCA:322641,
+  gBronze:0, gArgent:5, gOr:8.5, gPlatine:12,
+  season:SEASONALITY_2025, seasonLabel:'saisonnalité 2025 (Excel)'};
 const DEFAULT_ROSTER=[{name:'Game Master 1',avatar:'🎮'},{name:'Game Master 2',avatar:'🕹️'},{name:'Game Master 3',avatar:'🧩'},{name:'Game Master 4',avatar:'🔦'}];
 
 let MODE=null;            // 'firebase' | 'local'
@@ -623,8 +649,58 @@ function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;',
 function monthEntries(){const mk=curMonth();return state.entries.filter(e=>monthKey(e.date)===mk);}
 function sum(arr,f){return arr.reduce((a,e)=>a+(f(e)||0),0);}
 function avatarOf(name){const r=state.roster.find(x=>x.name===name);return r?r.avatar:'🎮';}
-function platineT(){return state.config.targetPlatine||Math.round(state.config.targetArgent*1.2);}
-function tierOf(ca){const ts=[state.config.targetBronze,state.config.targetArgent,state.config.targetOr,platineT()];let c=-1;for(let i=0;i<4;i++)if(ca>=ts[i])c=i;return c;}
+/* ---- Objectifs effectifs du mois en cours ----
+   Si autoOn : paliers = CA réf × (1 + croissance) × part du mois (saisonnalité).
+   Sinon : montants fixes saisis à la main. */
+function effTargets(){
+  const C=state.config;
+  if(C.autoOn){
+    const mi=new Date().getMonth();
+    const season=(Array.isArray(C.season)&&C.season.length===12)?C.season:SEASONALITY_2025;
+    const w=season[mi]||1/12;
+    const base=C.refCA||0;
+    const mk=(g)=>Math.round(base*(1+(g||0)/100)*w);
+    return {bronze:mk(C.gBronze),argent:mk(C.gArgent),or:mk(C.gOr),platine:mk(C.gPlatine),auto:true,w:w,mi:mi};
+  }
+  const pl=C.targetPlatine||Math.round(C.targetArgent*1.2);
+  return {bronze:C.targetBronze,argent:C.targetArgent,or:C.targetOr,platine:pl,auto:false};
+}
+function platineT(){return effTargets().platine;}
+function tierOf(ca){const T=effTargets();const ts=[T.bronze,T.argent,T.or,T.platine];let c=-1;for(let i=0;i<4;i++)if(ca>=ts[i])c=i;return c;}
+
+/* ---- Agrégation d'une année (depuis les saisies de l'appli) ---- */
+function yearAgg(year){
+  const s=year+'-01-01', e=year+'-12-31';
+  const es=state.entries.filter(x=>x.ca!=null&&x.date>=s&&x.date<=e);
+  const monthly=new Array(12).fill(0); let tot=0;
+  es.forEach(x=>{const m=parseInt(x.date.slice(5,7),10)-1; if(m>=0&&m<12){monthly[m]+=x.ca; tot+=x.ca;}});
+  const season=tot>0?monthly.map(v=>v/tot):null;
+  const monthsWithData=monthly.filter(v=>v>0).length;
+  return {ca:tot,monthly,season,monthsWithData};
+}
+/* ---- Récupérer la référence depuis les vraies données de l'année précédente ---- */
+function autoFromData(){
+  const C=state.config, refYear=(C.objYear||new Date().getFullYear())-1;
+  const y=yearAgg(refYear);
+  if(y.ca<=0){toast('⚠️','Aucune donnée '+refYear+' dans l\'appli — garde la référence actuelle');return;}
+  C.refCA=Math.round(y.ca);
+  if(y.season) C.season=y.season;
+  C.seasonLabel='données '+refYear+' ('+y.monthsWithData+'/12 mois)';
+  writeConfig(); bindObjUI(); render();
+  toast('📥','Référence '+refYear+' : '+fmt(C.refCA)+' € ('+y.monthsWithData+' mois de données)');
+}
+/* ---- Bascule d'année automatique ---- */
+let rolloverDone=false;
+function autoRollover(){
+  const C=state.config; if(!C.autoOn) return;
+  const curY=new Date().getFullYear();
+  if((C.objYear||0)<curY){
+    const y=yearAgg(curY-1);
+    if(y.ca>0){C.refCA=Math.round(y.ca); if(y.season)C.season=y.season; C.seasonLabel='données '+(curY-1)+' (auto)';}
+    C.objYear=curY; writeConfig();
+    toast('🎯','Objectifs '+curY+' calculés automatiquement à partir du réel '+(curY-1));
+  }
+}
 // Derniere journee synchronisee : la date de saisie la plus recente du mois
 function latestDay(){const ds=[...new Set(monthEntries().map(e=>e.date))].sort();return ds.length?ds[ds.length-1]:null;}
 
@@ -744,7 +820,7 @@ const BADGE_DEFS=[
 /* ============================================================
    RENDER
    ============================================================ */
-function afterState(){ if(!ready)return; render(); }
+function afterState(){ if(!ready)return; if(!rolloverDone){rolloverDone=true; autoRollover();} render(); }
 
 function render(){
   const C=state.config;
@@ -757,21 +833,21 @@ function render(){
 
   document.getElementById('heroMonth').textContent=monthLabel(curMonth());
   document.getElementById('heroCaVal').textContent=fmt(caM)+' €';
-  const PT=platineT();
+  const T=effTargets(); const PT=T.platine;
   document.getElementById('bigFill').style.width=(PT>0?Math.min(100,caM/PT*100):0)+'%';
   document.getElementById('bigPct').textContent=fmt(caM)+' €';
-  document.getElementById('heroRemain').textContent=fmt(Math.max(0,C.targetOr-caM))+' €';
+  document.getElementById('heroRemain').textContent=fmt(Math.max(0,T.or-caM))+' €';
 
-  const tiers=[{ic:'🥉',name:'Bronze',t:C.targetBronze},{ic:'🥈',name:'Argent',t:C.targetArgent},{ic:'🥇',name:'Or',t:C.targetOr},{ic:'💎',name:'Platine',t:PT}];
+  const tiers=[{ic:'🥉',name:'Bronze',t:T.bronze},{ic:'🥈',name:'Argent',t:T.argent},{ic:'🥇',name:'Or',t:T.or},{ic:'💎',name:'Platine',t:PT}];
   let curT=-1;for(let i=0;i<tiers.length;i++){if(caM>=tiers[i].t)curT=i;}
   const mIc=document.getElementById('medalNowIc'),mNa=document.getElementById('medalNowName'),mNx=document.getElementById('medalNowNext');
-  if(curT<0){mIc.textContent='⚪';mNa.textContent='À décrocher';mNx.textContent='Bronze à '+fmt(C.targetBronze)+' € (reste '+fmt(Math.max(0,C.targetBronze-caM))+' €)';}
+  if(curT<0){mIc.textContent='⚪';mNa.textContent='À décrocher';mNx.textContent='Bronze à '+fmt(T.bronze)+' € (reste '+fmt(Math.max(0,T.bronze-caM))+' €)';}
   else{mIc.textContent=tiers[curT].ic;mNa.textContent='Médaille '+tiers[curT].name;
     if(curT<tiers.length-1)mNx.textContent='Vers '+tiers[curT+1].name+' : '+fmt(tiers[curT+1].t)+' € (reste '+fmt(Math.max(0,tiers[curT+1].t-caM))+' €)';
     else mNx.textContent='🏆 Palier maximum — chapeau l\'équipe !';}
   document.getElementById('medalStrip').innerHTML=tiers.map(t=>
     '<div class="medal-pill'+(caM>=t.t?' on':'')+'"><div class="mp-ic">'+t.ic+'</div><div class="mp-name">'+t.name+'</div><div class="mp-t">'+fmt(t.t)+' €</div></div>').join('');
-  [['mkBronze',C.targetBronze],['mkArgent',C.targetArgent],['mkOr',C.targetOr]].forEach(pair=>{
+  [['mkBronze',T.bronze],['mkArgent',T.argent],['mkOr',T.or]].forEach(pair=>{
     const el=document.getElementById(pair[0]);if(el)el.style.left=(PT>0?Math.min(100,pair[1]/PT*100):0)+'%';});
 
   // célébration temps réel (tous les appareils) quand le palier monte
@@ -779,14 +855,14 @@ function render(){
   prevTier=curT;
 
   const day=new Date().getDate(), dim=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).getDate();
-  const expected=C.targetArgent*(day/dim);
+  const expected=T.argent*(day/dim);
   const paceEl=document.getElementById('heroPace');
   if(caM>=expected){paceEl.innerHTML='📈 En avance sur le rythme';paceEl.style.color='var(--green)';}
   else{paceEl.innerHTML='⏳ Rythme à tenir : '+fmt(expected)+' € à ce jour';paceEl.style.color='var(--mute)';}
 
   setGauge('kPanier',fmt(panier)+' €','kPanierBar',C.panierTarget>0?panier/C.panierTarget*100:0,panier>=C.panierTarget?'ok':panier>=C.panierTarget*0.9?'mid':'low');
   document.getElementById('kPanierSub').textContent=sessM>0?('sur '+sessM+' sessions'):'En attente de saisies';
-  const sessGoal=Math.round(C.targetArgent/C.panierTarget);
+  const sessGoal=Math.round(T.argent/C.panierTarget);
   setGauge('kSessions',fmt(sessM),'kSessionsBar',sessGoal>0?sessM/sessGoal*100:0,sessM>=sessGoal?'ok':'low');
   document.getElementById('kSessionsSub').textContent='≈ '+sessGoal+' pour l\'objectif CA';
   setGauge('kAvis',fmt(avisM),'kAvisBar',C.targetAvis>0?avisM/C.targetAvis*100:0,avisM>=C.targetAvis?'ok':avisM>=C.targetAvis*0.5?'mid':'low');
@@ -801,7 +877,7 @@ function render(){
   document.getElementById('tSessions').textContent=fmt(sessT);
   document.getElementById('tPanier').textContent=(panierT>0?fmt(panierT):'—')+' €';
   document.getElementById('tAvis').textContent=fmt(avisT);
-  const dayGoal=C.targetArgent/C.openDays;
+  const dayGoal=T.argent/C.openDays;
   const dg=document.getElementById('dayGoal');
   if(caT>=dayGoal&&caT>0){dg.className='day-goal';dg.innerHTML='✅ Objectif du jour atteint ! ('+fmt(dayGoal)+' €)';}
   else{dg.className='day-goal miss';dg.innerHTML='🎯 Objectif du jour : '+fmt(dayGoal)+' € &nbsp;·&nbsp; reste '+fmt(Math.max(0,dayGoal-caT))+' €';}
@@ -903,6 +979,42 @@ function bindSettings(){
     el.oninput=()=>{let v=parseFloat(el.value)||0;v=(key==='openDays')?Math.max(1,v):Math.max(0,v);state.config[key]=v;
       clearTimeout(tmr);tmr=setTimeout(writeConfig,400); if(!fb())render();};
   });
+  bindObjUI();
+}
+/* ---- objectifs auto : UI ---- */
+function bindObjUI(){
+  const C=state.config;
+  const set=(id,val)=>{const el=document.getElementById(id); if(el&&document.activeElement!==el) el.value=val;};
+  const on=document.getElementById('objOn'); if(on){on.checked=!!C.autoOn; on.onchange=()=>{C.autoOn=on.checked; writeConfig(); render(); renderObjPreview();};}
+  set('objYear',C.objYear); set('objRefCA',Math.round(C.refCA||0));
+  set('gB',C.gBronze); set('gA',C.gArgent); set('gO',C.gOr); set('gP',C.gPlatine);
+  const sl=document.getElementById('objSeasonLabel'); if(sl) sl.textContent=C.seasonLabel||'saisonnalité 2025';
+  const num=(id,key,min)=>{const el=document.getElementById(id); if(!el)return; let tmr=null;
+    el.oninput=()=>{let v=parseFloat(el.value); if(isNaN(v))v=0; if(min!=null)v=Math.max(min,v); C[key]=v;
+      clearTimeout(tmr);tmr=setTimeout(writeConfig,400); render(); renderObjPreview();};};
+  num('objYear','objYear',2024); num('objRefCA','refCA',0);
+  num('gB','gBronze',null); num('gA','gArgent',null); num('gO','gOr',null); num('gP','gPlatine',null);
+  renderObjPreview();
+}
+function renderObjPreview(){
+  const el=document.getElementById('objPreview'); if(!el) return;
+  const C=state.config, base=C.refCA||0;
+  const MN=['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
+  const mi=new Date().getMonth();
+  const season=(Array.isArray(C.season)&&C.season.length===12)?C.season:SEASONALITY_2025;
+  const w=season[mi]||1/12;
+  const tiers=[['🥉',C.gBronze],['🥈',C.gArgent],['🥇',C.gOr],['💎',C.gPlatine]];
+  let h='<div style="margin-bottom:8px"><b>Objectifs annuels '+(C.objYear)+'</b> · réf '+fmt(base)+' € · '+(C.seasonLabel||'')+'</div>';
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;margin-bottom:10px">';
+  tiers.forEach(t=>{const an=Math.round(base*(1+(t[1]||0)/100)); h+='<div>'+t[0]+' <b>'+fmt(an)+' €</b> <span style="color:var(--mute)">('+((t[1]||0)>=0?'+':'')+(t[1]||0)+'%)</span></div>';});
+  h+='</div>';
+  if(C.autoOn){
+    const mk=(g)=>fmt(Math.round(base*(1+(g||0)/100)*w));
+    h+='<div style="color:var(--gold)">✅ Actif — objectif de <b>'+MN[mi]+'</b> ('+(Math.round(w*1000)/10)+'% de l\'année) : 🥉 '+mk(C.gBronze)+' · 🥈 '+mk(C.gArgent)+' · 🥇 '+mk(C.gOr)+' · 💎 '+mk(C.gPlatine)+' €</div>';
+  } else {
+    h+='<div style="color:var(--mute)">Inactif — coche la case pour piloter les paliers automatiquement par saisonnalité.</div>';
+  }
+  el.innerHTML=h;
 }
 function bindSettingsValues(){const map={setBronze:'targetBronze',setArgent:'targetArgent',setOr:'targetOr',setPlatine:'targetPlatine',setTargetAvis:'targetAvis',setOpenDays:'openDays'};
   Object.keys(map).forEach(id=>{const el=document.getElementById(id);if(el&&document.activeElement!==el)el.value=state.config[map[id]];});}
