@@ -197,12 +197,27 @@
   .cmp-tab.active{background:linear-gradient(135deg,var(--gold),var(--gold-br));color:var(--bg-deep);border-color:var(--gold-br);box-shadow:0 8px 22px -10px rgba(232,177,74,.6)}
   .cmp-period{font-size:15px;color:var(--soft);margin-bottom:18px;font-weight:600}
   .cmp-period b{color:var(--gold)}
-  .cmp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px}
-  .cmp-tile{background:var(--bg-card);border:1px solid var(--line);border-radius:16px;padding:22px}
-  .cmp-tile .ct-name{font-size:13px;text-transform:uppercase;letter-spacing:.09em;color:var(--mute);font-weight:800;margin-bottom:12px}
-  .cmp-tile .ct-val{font-family:'Bebas Neue';font-size:clamp(44px,5vw,60px);line-height:.85;color:var(--ink)}
-  .cmp-tile .ct-prev{font-size:15px;color:var(--soft);margin-top:12px;font-weight:600}
-  .cmp-tile .ct-delta{display:inline-flex;align-items:center;gap:6px;font-size:18px;font-weight:800;padding:6px 15px;border-radius:22px;margin-top:12px}
+  .cmp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+  .cmp-tile{background:var(--bg-card);border:1px solid var(--line);border-radius:15px;padding:16px 15px;position:relative;overflow:hidden}
+  .cmp-tile.wide{background:linear-gradient(135deg,rgba(232,177,74,.10),rgba(232,177,74,.02));border-color:rgba(232,177,74,.32)}
+  .ct-top{display:flex;align-items:center;gap:7px;margin-bottom:9px;flex-wrap:wrap}
+  .ct-ic{font-size:17px;line-height:1}
+  .cmp-tile .ct-name{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--soft);font-weight:800;flex:1;min-width:0}
+  .cmp-tile .ct-val{font-family:'Bebas Neue';font-size:clamp(36px,4.4vw,50px);line-height:.86;color:var(--ink);letter-spacing:.01em}
+  .cmp-tile.wide .ct-val{background:linear-gradient(120deg,var(--gold),var(--gold-br));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .cmp-tile .ct-delta{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:800;padding:3px 9px;border-radius:20px;white-space:nowrap}
+  .ct-bar{height:6px;background:var(--bg-elev);border-radius:4px;overflow:hidden;margin-top:11px;position:relative}
+  .ct-fill{height:100%;border-radius:4px;width:0;transition:width .8s cubic-bezier(.2,.8,.2,1)}
+  .ct-fill.gold{background:linear-gradient(90deg,var(--gold),var(--gold-br))}
+  .ct-fill.g{background:linear-gradient(90deg,var(--green-d),var(--green))}
+  .ct-fill.b{background:linear-gradient(90deg,#1e40af,var(--blue))}
+  .ct-fill.p{background:linear-gradient(90deg,#7c3aed,var(--purple))}
+  .ct-foot{display:flex;justify-content:space-between;gap:8px;margin-top:8px;font-size:11.5px;font-weight:600;flex-wrap:wrap}
+  .ct-obj{color:var(--gold)}
+  .ct-obj.done{color:var(--green)}
+  .ct-n1{color:var(--mute);font-family:'JetBrains Mono';font-size:11px}
+  .cmp-tile.hit{border-color:rgba(74,222,128,.45)}
+  .cmp-tile.hit::before{content:'✓';position:absolute;top:8px;right:9px;color:var(--green);font-weight:800;font-size:12px}
   .ct-delta.up{color:var(--green);background:rgba(74,222,128,.13)}
   .ct-delta.down{color:var(--red);background:rgba(248,113,113,.13)}
   .ct-delta.flat{color:var(--mute);background:var(--bg-elev)}
@@ -220,6 +235,101 @@
   .codes-detail{padding:8px 0 8px 20px}
   .codes-detail .code-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--soft);padding:4px 0;border-bottom:1px solid var(--line)}
   .codes-detail .code-row:last-child{border-bottom:none}
+
+  /* ===== Sections repliables (détail, analyse, journal) ===== */
+  details.fold{background:var(--bg-panel);border:1px solid var(--line);border-radius:16px;padding:2px 20px;margin-bottom:14px}
+  details.fold summary{cursor:pointer;padding:15px 0;font-weight:800;font-size:15px;list-style:none;display:flex;align-items:center;gap:9px;color:var(--soft)}
+  details.fold summary::-webkit-details-marker{display:none}
+  details.fold summary::after{content:'▾';margin-left:auto;color:var(--mute);font-size:13px;transition:transform .2s}
+  details.fold[open] summary{color:var(--gold);border-bottom:1px solid var(--line)}
+  details.fold[open] summary::after{transform:rotate(180deg)}
+  details.fold .fold-body{padding:16px 0 20px}
+  details.fold .fold-sub{font-size:11px;color:var(--mute);font-weight:600;text-transform:none;letter-spacing:0;margin-left:2px}
+
+  /* ===== MOBILE — vertical, un maximum d'infos avant de scroller ===== */
+  @media(max-width:640px){
+    body{padding-bottom:26px}
+    .wrap{padding:0 10px}
+    header{padding:9px 0 7px;margin-bottom:9px}
+    h1.title{font-size:25px}
+    .head-sub{display:none}
+    .brand-tag{font-size:9px;margin-bottom:2px}
+    .sync-pill{margin-top:4px;font-size:9.5px;padding:3px 8px}
+    .sync-pill .dot{width:6px;height:6px}
+    .hero-ca{padding:12px 13px;border-radius:14px;margin-bottom:10px}
+    .hero-ca-top{gap:8px}
+    .hero-ca-val{font-size:40px}
+    .hero-ca-lab{font-size:10px}
+    .hero-ca-month{font-size:11px}
+    .medal-now{padding:6px 9px;gap:8px;border-radius:10px}
+    .medal-now-ic{font-size:23px}
+    .medal-now-txt .name{font-size:12px}
+    .medal-now-txt .next{font-size:9.5px}
+    .medal-now-txt .lab{font-size:8.5px}
+    .big-track{height:16px;margin-top:9px;border-radius:9px}
+    .big-pct{font-size:10px;right:8px}
+    .hero-ca-foot{font-size:10px;margin-top:6px;gap:4px}
+    .medal-strip{gap:5px;margin-top:8px}
+    .medal-pill{padding:6px 2px;border-radius:9px}
+    .medal-pill .mp-ic{font-size:15px}
+    .medal-pill .mp-name{font-size:8.5px;margin-top:1px}
+    .medal-pill .mp-t{font-size:8.5px;margin-top:0}
+    .card{padding:12px 12px;border-radius:14px;margin-bottom:10px}
+    .card h2{font-size:19px;gap:6px}
+    .card .card-sub{font-size:10px;margin-bottom:9px}
+    #cmpCard .card-sub{display:none}
+    /* onglets : les 5 tiennent sur une ligne, largeurs egales */
+    #cmpTabs{flex-wrap:nowrap;gap:4px;margin-bottom:8px;margin-top:8px}
+    #cmpTabs .cmp-tab{flex:1 1 0;min-width:0;padding:10px 3px;font-size:12px;border-radius:9px;text-align:center;letter-spacing:-.01em}
+    .cmp-period{font-size:10.5px;margin-bottom:9px}
+    .cmp-grid{grid-template-columns:repeat(2,1fr);gap:8px}
+    .cmp-tile{padding:10px 10px;border-radius:12px}
+    .cmp-tile.wide{grid-column:1 / -1}
+    .cmp-tile .ct-val{font-size:28px}
+    .cmp-tile.wide .ct-val{font-size:38px}
+    .cmp-tile .ct-name{font-size:9px;letter-spacing:.04em}
+    .ct-top{margin-bottom:6px;gap:5px}
+    .ct-ic{font-size:13px}
+    .cmp-tile .ct-delta{font-size:11px;padding:2px 6px}
+    .ct-foot{font-size:9.5px;margin-top:5px;gap:3px}
+    .ct-n1{font-size:9px}
+    .ct-bar{height:5px;margin-top:7px}
+    .today-grid{border-radius:11px}
+    .today-cell{padding:12px 11px}
+    .today-cell .lab{font-size:9px;margin-bottom:3px}
+    .today-cell .v{font-size:25px}
+    .today-cell .v.small{font-size:19px}
+    .day-goal{font-size:11.5px;padding:10px 11px}
+    details.fold{padding:2px 15px;margin-bottom:13px;border-radius:15px}
+    details.fold summary{font-size:14px;padding:13px 0}
+    details.settings{padding:2px 15px;margin-bottom:13px}
+    .lb-row{grid-template-columns:26px 1fr auto;gap:9px;padding:9px 0}
+    .lb-name{font-size:13px}
+    .log-row{font-size:12px;padding:8px 0;gap:9px}
+    .log-meta{font-size:10px}
+    .set-grid{grid-template-columns:1fr}
+    footer{padding:20px 0 8px;font-size:10px}
+  }
+  @media(max-width:400px){
+    .cmp-tile .ct-val{font-size:28px}
+    .cmp-tile.wide .ct-val{font-size:40px}
+    .hero-ca-val{font-size:42px}
+  }
+  /* ===== GRAND ÉCRAN / TV salle de pause : on occupe la largeur ===== */
+  @media(min-width:1500px){
+    .wrap{max-width:1500px}
+    .cmp-tile{padding:20px 19px}
+    .cmp-tile .ct-name{font-size:13px}
+    .cmp-tile .ct-val{font-size:58px}
+    .cmp-tile .ct-delta{font-size:15px;padding:4px 11px}
+    .ct-ic{font-size:20px}
+    .ct-foot{font-size:13px}
+    .ct-n1{font-size:12.5px}
+    .ct-bar{height:8px}
+    .today-cell .v{font-size:36px}
+    .today-cell .v.small{font-size:28px}
+    .today-cell .lab{font-size:11px}
+  }
 </style>
 </head>
 <body>
@@ -305,36 +415,9 @@
     <div class="medal-strip" id="medalStrip"></div>
   </div>
 
-  <div class="kpi-row">
-    <div class="kpi">
-      <div class="kpi-top"><div class="kpi-ic">🛒</div><div><div class="kpi-name">Panier moyen</div><div class="kpi-goal">Objectif 104 €</div></div></div>
-      <div class="kpi-val low" id="kPanier">0 €</div>
-      <div class="kpi-track"><div class="kpi-bar g" id="kPanierBar"></div></div>
-      <div class="kpi-sub" id="kPanierSub">En attente de saisies</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-top"><div class="kpi-ic">🎫</div><div><div class="kpi-name">Sessions du mois</div><div class="kpi-goal">Remplissage</div></div></div>
-      <div class="kpi-val low" id="kSessions">0</div>
-      <div class="kpi-track"><div class="kpi-bar b" id="kSessionsBar"></div></div>
-      <div class="kpi-sub" id="kSessionsSub">Parties jouées ce mois</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-top"><div class="kpi-ic">⭐</div><div><div class="kpi-name">Avis Google</div><div class="kpi-goal">Objectif 30 / mois</div></div></div>
-      <div class="kpi-val low" id="kAvis">0</div>
-      <div class="kpi-track"><div class="kpi-bar gold" id="kAvisBar"></div></div>
-      <div class="kpi-sub" id="kAvisSub">Récoltés ce mois</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-top"><div class="kpi-ic">🧑‍🤝‍🧑</div><div><div class="kpi-name">Joueurs</div><div class="kpi-goal">Accueillis ce mois</div></div></div>
-      <div class="kpi-val low" id="kJoueurs">0</div>
-      <div class="kpi-track"><div class="kpi-bar p" id="kJoueursBar"></div></div>
-      <div class="kpi-sub" id="kJoueursSub">En attente de synchro</div>
-    </div>
-  </div>
-
-  <div class="card" id="cmpCard" style="margin-bottom:22px">
-    <h2>📊 Comparaison N / N‑1</h2>
-    <div class="card-sub">Même période l'an dernier · le « jour » compare au même jour de semaine</div>
+  <div class="card" id="cmpCard">
+    <h2>📊 Les chiffres · <span id="cmpTabName" style="color:var(--gold)">jour</span></h2>
+    <div class="card-sub">Objectifs + comparaison avec l'an dernier — choisis ta période</div>
     <div class="cmp-tabs" id="cmpTabs">
       <button class="cmp-tab active" data-tab="jour" onclick="setCmpTab(this)">Jour</button>
       <button class="cmp-tab" data-tab="semaine" onclick="setCmpTab(this)">Semaine</button>
@@ -346,57 +429,7 @@
     <div class="cmp-grid" id="cmpGrid"></div>
   </div>
 
-  <div class="card" id="multiCard" style="margin-bottom:22px">
-    <h2>🔭 Analyse par période — toutes les années</h2>
-    <div class="card-sub">Choisis une plage (ex. les 2 dernières semaines de juillet) et compare chaque année</div>
-    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px">
-      <div class="field" style="margin:0"><label>Du</label><input type="date" id="mDebut" onchange="renderMulti()"></div>
-      <div class="field" style="margin:0"><label>Au</label><input type="date" id="mFin" onchange="renderMulti()"></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="cmp-tab" style="padding:9px 16px;font-size:14px" onclick="mPreset('q1')">1re quinzaine</button>
-        <button class="cmp-tab" style="padding:9px 16px;font-size:14px" onclick="mPreset('q2')">2e quinzaine</button>
-        <button class="cmp-tab" style="padding:9px 16px;font-size:14px" onclick="mPreset('mois')">Tout le mois</button>
-      </div>
-    </div>
-    <div id="multiBody" style="overflow-x:auto"></div>
-    <div class="multi-insight" id="multiInsight"></div>
-  </div>
-
-  <div class="cols">
-    <div style="display:flex;flex-direction:column;gap:22px">
-      <div class="card">
-        <h2>📅 Hier</h2>
-        <div class="card-sub" id="todayDate">en attente de la première synchro</div>
-        <div class="today-grid">
-          <div class="today-cell"><div class="lab">CA encaissé</div><div class="v" id="tCa">0 €</div></div>
-          <div class="today-cell"><div class="lab">Sessions jouées</div><div class="v small" id="tSessions">0</div></div>
-          <div class="today-cell"><div class="lab">Panier moyen</div><div class="v small" id="tPanier">— €</div></div>
-          <div class="today-cell"><div class="lab">Nouveaux avis</div><div class="v small" id="tAvis">0</div></div>
-        </div>
-        <div class="day-goal miss" id="dayGoal">Objectif du jour : — €</div>
-      </div>
-
-      <div class="card">
-        <h2>🗓️ Semaine dernière</h2>
-        <div class="card-sub" id="weekLabel">—</div>
-        <div class="today-grid">
-          <div class="today-cell"><div class="lab">CA encaissé</div><div class="v" id="wCa">0 €</div></div>
-          <div class="today-cell"><div class="lab">Sessions jouées</div><div class="v small" id="wSessions">0</div></div>
-          <div class="today-cell"><div class="lab">Joueurs accueillis</div><div class="v small" id="wJoueurs">0</div></div>
-          <div class="today-cell"><div class="lab">Nouveaux avis</div><div class="v small" id="wAvis">0</div></div>
-        </div>
-        <div class="day-goal miss" id="weekCompare" style="margin-top:14px">—</div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>🔍 Détail de la dernière synchro</h2>
-      <div class="card-sub">Ce que le robot a lu sur 4escape</div>
-      <div id="syncDetail" class="log-empty">En attente de la première synchro…</div>
-    </div>
-  </div>
-
-  <div class="card" style="margin-bottom:22px">
+  <div class="card">
     <h2>🔥 Records de l'équipe</h2>
     <div class="card-sub">Les sommets à battre — performances collectives</div>
     <div class="today-grid">
@@ -408,23 +441,40 @@
     <div class="day-goal" id="rFlag" style="margin-top:14px;display:none"></div>
   </div>
 
-  <div class="card" style="margin-bottom:22px">
+  <div class="card">
     <h2>🛍️ Ventes co — l'équipe qui vend</h2>
     <div class="card-sub" id="ventesCoSub">Déclarées dans SYNERGIA</div>
     <div id="ventesCoBody" class="log-empty">En attente…</div>
   </div>
 
-  <div class="card" style="margin-bottom:22px">
-    <h2>🏆 Victoires de l'équipe</h2>
-    <div class="card-sub">Débloquées collectivement ce mois</div>
-    <div class="badges" id="badges"></div>
-  </div>
+  <details class="fold" id="foldDetail">
+    <summary>🔍 Détail de la dernière synchro <span class="fold-sub">ce que le robot a lu sur 4escape</span></summary>
+    <div class="fold-body">
+      <div id="syncDetail" class="log-empty">En attente de la première synchro…</div>
+    </div>
+  </details>
 
-  <div class="card">
-    <h2>🧾 Journal des synchronisations</h2>
-    <div class="card-sub">Historique de contrôle — une ligne par jour, écrite par le robot 🤖</div>
-    <div id="log"></div>
-  </div>
+  <details class="fold" id="foldMulti">
+    <summary>🔭 Analyse par période <span class="fold-sub">toutes les années comparées</span></summary>
+    <div class="fold-body">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
+        <div class="field" style="margin:0"><label>Du</label><input type="date" id="mDebut" onchange="renderMulti()"></div>
+        <div class="field" style="margin:0"><label>Au</label><input type="date" id="mFin" onchange="renderMulti()"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="cmp-tab" style="padding:9px 15px;font-size:13px" onclick="mPreset('q1')">1re quinzaine</button>
+          <button class="cmp-tab" style="padding:9px 15px;font-size:13px" onclick="mPreset('q2')">2e quinzaine</button>
+          <button class="cmp-tab" style="padding:9px 15px;font-size:13px" onclick="mPreset('mois')">Tout le mois</button>
+        </div>
+      </div>
+      <div id="multiBody" style="overflow-x:auto"></div>
+      <div class="multi-insight" id="multiInsight"></div>
+    </div>
+  </details>
+
+  <details class="fold" id="foldLog">
+    <summary>🧾 Journal des synchronisations <span class="fold-sub">historique de contrôle du robot 🤖</span></summary>
+    <div class="fold-body"><div id="log"></div></div>
+  </details>
 
   <details class="settings" id="settings">
     <summary>Réglages · objectifs</summary>
@@ -750,29 +800,74 @@ function periodAgg(startYMD,endYMD){
   const ca=sum(es,e=>e.ca),ses=sum(es,e=>e.sessions),jo=sum(es,e=>e.players),av=sum(es,e=>e.avis);
   return {ca,sessions:ses,joueurs:jo,avis:av,days:es.length,panier:ses>0?ca/ses:0};
 }
-function setCmpTab(btn){CMP_TAB=btn.dataset.tab;[...document.querySelectorAll('.cmp-tab')].forEach(b=>b.classList.toggle('active',b===btn));renderCompare();}
+function setCmpTab(btn){CMP_TAB=btn.dataset.tab;[...document.querySelectorAll('#cmpTabs .cmp-tab')].forEach(b=>b.classList.toggle('active',b===btn));renderCompare();}
+
+/* Objectif CA d'un mois donné (palier « Argent » = objectif de référence).
+   Respecte les objectifs automatiques par saisonnalité s'ils sont activés. */
+function monthCATarget(year,monthIdx){
+  const C=state.config;
+  if(C.autoOn){
+    const season=(Array.isArray(C.season)&&C.season.length===12)?C.season:SEASONALITY_2025;
+    return Math.round((C.refCA||0)*(1+(C.gArgent||0)/100)*(season[monthIdx]||1/12));
+  }
+  return C.targetArgent||0;
+}
+/* Objectifs adaptés à la période affichée (jour / semaine / mois / trim / année) */
+function periodTargets(tab,anchor){
+  const C=state.config, T=effTargets();
+  const y=anchor.getFullYear(), mi=anchor.getMonth();
+  const dim=new Date(y,mi+1,0).getDate();
+  const openD=C.openDays||26;
+  let ca=0, avis=0;
+  if(tab==='jour'){ ca=T.argent/openD; avis=(C.targetAvis||0)/openD; }
+  else if(tab==='semaine'){ ca=monthCATarget(y,mi)*7/dim; avis=(C.targetAvis||0)*7/dim; }
+  else if(tab==='mois'){ ca=monthCATarget(y,mi); avis=C.targetAvis||0; }
+  else if(tab==='trimestre'){ const q=Math.floor(mi/3)*3; for(let k=0;k<3;k++)ca+=monthCATarget(y,q+k); avis=(C.targetAvis||0)*3; }
+  else { for(let k=0;k<12;k++)ca+=monthCATarget(y,k); avis=(C.targetAvis||0)*12; }
+  const panier=C.panierTarget||0;
+  return {ca,panier,sessions:panier>0?ca/panier:0,avis};
+}
+const TAB_NAMES={jour:'du jour',semaine:'de la semaine',mois:'du mois',trimestre:'du trimestre',annee:'de l\'année'};
+
 function renderCompare(){
   const grid=document.getElementById('cmpGrid'); if(!grid)return;
   const allDates=state.entries.filter(e=>e.date).map(e=>e.date).sort();
   const anchorYMD=allDates.length?allDates[allDates.length-1]:todayStr();
-  const P=computePeriods(ymdToDate(anchorYMD),CMP_TAB);
+  const anchor=ymdToDate(anchorYMD);
+  const P=computePeriods(anchor,CMP_TAB);
+  const tn=document.getElementById('cmpTabName'); if(tn)tn.textContent=TAB_NAMES[CMP_TAB]||'';
   document.getElementById('cmpPeriod').innerHTML='📅 <b>'+P.label+'</b> &nbsp;·&nbsp; '+P.prevLabel;
   const cur=periodAgg(P.curStart,P.curEnd), prev=periodAgg(P.prevStart,P.prevEnd);
   const hasPrev=prev.days>0;
+  const TG=periodTargets(CMP_TAB,anchor);
+  const ratio=cur.sessions>0?cur.joueurs/cur.sessions:0;
+  const eur=v=>fmt(v)+' €';
+  const nar=(typeof window!=='undefined'&&window.matchMedia)?window.matchMedia('(max-width:640px)').matches:false;
   const metrics=[
-    {name:'CA encaissé',cur:cur.ca,prev:prev.ca,f:v=>fmt(v)+' €'},
-    {name:'Panier moyen',cur:cur.panier,prev:prev.panier,f:v=>fmt(v)+' €'},
-    {name:'Sessions jouées',cur:cur.sessions,prev:prev.sessions,f:v=>fmt(v)},
-    {name:'Joueurs',cur:cur.joueurs,prev:prev.joueurs,f:v=>fmt(v)},
-    {name:'Avis Google',cur:cur.avis,prev:prev.avis,f:v=>fmt(v)},
+    {ic:'💰',name:'CA encaissé',   cur:cur.ca,     prev:prev.ca,     f:eur, target:TG.ca,       bar:'gold', wide:true},
+    {ic:'🛒',name:nar?'Panier':'Panier moyen', cur:cur.panier, prev:prev.panier, f:eur, target:TG.panier, bar:'g'},
+    {ic:'🎫',name:'Sessions',      cur:cur.sessions,prev:prev.sessions,f:v=>fmt(v),target:TG.sessions,bar:'b'},
+    {ic:'🧑‍🤝‍🧑',name:'Joueurs',    cur:cur.joueurs,prev:prev.joueurs,f:v=>fmt(v),target:null,   bar:'p',
+      foot:ratio>0?('≈ '+(Math.round(ratio*10)/10).toLocaleString('fr-FR')+' / session'):'—', pct:Math.min(100,ratio/6*100)},
+    {ic:'⭐',name:nar?'Avis':'Avis Google', cur:cur.avis, prev:prev.avis, f:v=>fmt(v),target:TG.avis, bar:'gold'},
   ];
   grid.innerHTML=metrics.map(m=>{
     let delta;
-    if(!hasPrev||m.prev===0){delta='<div class="ct-delta flat">— N‑1 indispo</div>';}
-    else{const pct=Math.round((m.cur-m.prev)/m.prev*100);const cls=pct>0?'up':pct<0?'down':'flat';const ar=pct>0?'▲':pct<0?'▼':'▬';
-      delta='<div class="ct-delta '+cls+'">'+ar+' '+(pct>0?'+':'')+pct+' %</div>';}
-    return '<div class="cmp-tile"><div class="ct-name">'+m.name+'</div><div class="ct-val">'+m.f(m.cur)+'</div>'+
-      '<div class="ct-prev">N‑1 : '+(hasPrev?m.f(m.prev):'—')+'</div>'+delta+'</div>';
+    if(!hasPrev){delta='<span class="ct-delta flat">N‑1 —</span>';}
+    else if(!m.prev){delta=m.cur>0?'<span class="ct-delta up">▲ nouveau</span>':'<span class="ct-delta flat">—</span>';}
+    else{const p=Math.round((m.cur-m.prev)/m.prev*100);const cls=p>0?'up':p<0?'down':'flat';const ar=p>0?'▲':p<0?'▼':'▬';
+      delta='<span class="ct-delta '+cls+'">'+ar+' '+(p>0?'+':'')+p+' %</span>';}
+    const hasT=m.target!=null&&m.target>0;
+    const share=hasT?Math.round(m.cur/m.target*100):0;
+    const done=hasT&&share>=100;
+    const pct=m.pct!=null?m.pct:(hasT?Math.min(100,share):0);
+    const objTxt=hasT?('🎯 '+m.f(Math.round(m.target))+' <span style="color:var(--mute)">('+share+' %)</span>'):(m.foot||'');
+    return '<div class="cmp-tile'+(m.wide?' wide':'')+(done?' hit':'')+'">'+
+      '<div class="ct-top"><span class="ct-ic">'+m.ic+'</span><span class="ct-name">'+m.name+'</span>'+delta+'</div>'+
+      '<div class="ct-val">'+m.f(m.cur)+'</div>'+
+      '<div class="ct-bar"><div class="ct-fill '+m.bar+'" style="width:'+Math.max(0,Math.min(100,pct))+'%"></div></div>'+
+      '<div class="ct-foot"><span class="ct-obj'+(done?' done':'')+'">'+objTxt+'</span><span class="ct-n1">N‑1 '+(hasPrev?m.f(m.prev):'—')+'</span></div>'+
+      '</div>';
   }).join('');
 }
 function toggleCodes(){const d=document.getElementById('codesDetail'),t=document.getElementById('codesTog');if(!d)return;const open=d.style.display==='none';d.style.display=open?'block':'none';if(t)t.textContent=open?'－':'＋';}
@@ -860,28 +955,6 @@ function render(){
   if(caM>=expected){paceEl.innerHTML='📈 En avance sur le rythme';paceEl.style.color='var(--green)';}
   else{paceEl.innerHTML='⏳ Rythme à tenir : '+fmt(expected)+' € à ce jour';paceEl.style.color='var(--mute)';}
 
-  setGauge('kPanier',fmt(panier)+' €','kPanierBar',C.panierTarget>0?panier/C.panierTarget*100:0,panier>=C.panierTarget?'ok':panier>=C.panierTarget*0.9?'mid':'low');
-  document.getElementById('kPanierSub').textContent=sessM>0?('sur '+sessM+' sessions'):'En attente de saisies';
-  const sessGoal=Math.round(T.argent/C.panierTarget);
-  setGauge('kSessions',fmt(sessM),'kSessionsBar',sessGoal>0?sessM/sessGoal*100:0,sessM>=sessGoal?'ok':'low');
-  document.getElementById('kSessionsSub').textContent='≈ '+sessGoal+' pour l\'objectif CA';
-  setGauge('kAvis',fmt(avisM),'kAvisBar',C.targetAvis>0?avisM/C.targetAvis*100:0,avisM>=C.targetAvis?'ok':avisM>=C.targetAvis*0.5?'mid':'low');
-  document.getElementById('kAvisSub').textContent=C.targetAvis+' visés · note ≥ 4,8';
-  const jSess=joueursM>0&&sessM>0?joueursM/sessM:0;
-  setGauge('kJoueurs',fmt(joueursM),'kJoueursBar',jSess/6*100,jSess>=4?'ok':jSess>0?'mid':'low');
-  document.getElementById('kJoueursSub').textContent=jSess>0?('≈ '+(Math.round(jSess*10)/10).toLocaleString('fr-FR')+' joueurs / session'):'En attente de synchro';
-
-  const ld=lday?new Date(lday+'T00:00'):null;
-  document.getElementById('todayDate').textContent=ld?ld.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}):'en attente de la première synchro';
-  document.getElementById('tCa').textContent=fmt(caT)+' €';
-  document.getElementById('tSessions').textContent=fmt(sessT);
-  document.getElementById('tPanier').textContent=(panierT>0?fmt(panierT):'—')+' €';
-  document.getElementById('tAvis').textContent=fmt(avisT);
-  const dayGoal=T.argent/C.openDays;
-  const dg=document.getElementById('dayGoal');
-  if(caT>=dayGoal&&caT>0){dg.className='day-goal';dg.innerHTML='✅ Objectif du jour atteint ! ('+fmt(dayGoal)+' €)';}
-  else{dg.className='day-goal miss';dg.innerHTML='🎯 Objectif du jour : '+fmt(dayGoal)+' € &nbsp;·&nbsp; reste '+fmt(Math.max(0,dayGoal-caT))+' €';}
-
   // Detail de la derniere synchro (champ detail des saisies auto du robot)
   const sd=document.getElementById('syncDetail');
   const lastAuto=te.find(e=>e.detail&&e.detail.vendu);
@@ -905,29 +978,6 @@ function render(){
       remisesBlock+
       line('🎮 Sessions jouées',(j.sessions||0)+' · '+(j.joueurs||0)+' joueurs')+
       line('⭐ Avis Google',(d.avisGoogle?('total '+d.avisGoogle.totalAvis+' · note '+(d.avisGoogle.note||'—')+' · +'+(d.avisGoogle.nouveaux||0)+' ce jour'):'—'));}
-
-  // Semaine derniere (lundi -> dimanche precedents) + comparaison
-  const now=new Date(); const dow=(now.getDay()+6)%7;             // 0 = lundi
-  const lastMon=new Date(now); lastMon.setDate(now.getDate()-dow-7);
-  const lastSun=new Date(lastMon); lastSun.setDate(lastMon.getDate()+6);
-  const prevMon=new Date(lastMon); prevMon.setDate(lastMon.getDate()-7);
-  const prevSun=new Date(lastMon); prevSun.setDate(lastMon.getDate()-1);
-  const inRange=(e,a,b)=>e.date>=ymd(a)&&e.date<=ymd(b);
-  const we=state.entries.filter(e=>inRange(e,lastMon,lastSun));
-  const pe=state.entries.filter(e=>inRange(e,prevMon,prevSun));
-  const wCa=sum(we,e=>e.ca), wSess=sum(we,e=>e.sessions), wJ=sum(we,e=>e.players), wAv=sum(we,e=>e.avis);
-  const pCa=sum(pe,e=>e.ca);
-  const fmtD=(d)=>d.toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
-  document.getElementById('weekLabel').textContent='du lundi '+fmtD(lastMon)+' au dimanche '+fmtD(lastSun);
-  document.getElementById('wCa').textContent=fmt(wCa)+' €';
-  document.getElementById('wSessions').textContent=fmt(wSess);
-  document.getElementById('wJoueurs').textContent=fmt(wJ);
-  document.getElementById('wAvis').textContent=fmt(wAv);
-  const wc=document.getElementById('weekCompare');
-  if(pCa>0){const dpc=Math.round((wCa-pCa)/pCa*100);
-    if(dpc>=0){wc.className='day-goal';wc.innerHTML='📈 +'+dpc+' % vs la semaine d\'avant ('+fmt(pCa)+' €)';}
-    else{wc.className='day-goal miss';wc.innerHTML='📉 '+dpc+' % vs la semaine d\'avant ('+fmt(pCa)+' €)';}}
-  else{wc.className='day-goal miss';wc.textContent='Pas encore d\'historique pour comparer';}
 
   // Records de l'équipe (collectif, sans nommer personne)
   const allPos=state.entries.filter(e=>e.ca>0);
@@ -954,10 +1004,6 @@ function render(){
       const md=['🥇','🥈','🥉'];
       vb.className='';
       vb.innerHTML=vc.contributors.map((c,i)=>'<div class="lb-row"><div class="lb-rank">'+(md[i]||(i+1))+'</div><div class="lb-name">'+esc(c.name)+'</div><div class="lb-xp">'+c.total+' '+esc(vc.unit||'ventes')+'</div></div>').join(''); } }
-
-  const m={ca:caM,sessions:sessM,avis:avisM,joueurs:joueursM,panier:panier};
-  document.getElementById('badges').innerHTML=BADGE_DEFS.map(b=>{const on=b.test(m);
-    return '<div class="badge'+(on?' earned':'')+'"><div class="badge-ic">'+b.ic+'</div><div class="badge-name">'+b.name+'</div><div class="badge-desc">'+b.desc+'</div></div>';}).join('');
 
   const log=document.getElementById('log');
   const sorted=me.slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,25);
