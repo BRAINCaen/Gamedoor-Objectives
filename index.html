@@ -279,8 +279,9 @@
     .card .card-sub{font-size:10px;margin-bottom:9px}
     #cmpCard .card-sub{display:none}
     /* onglets : les 5 tiennent sur une ligne, largeurs egales */
-    #cmpTabs{flex-wrap:nowrap;gap:4px;margin-bottom:8px;margin-top:8px}
-    #cmpTabs .cmp-tab{flex:1 1 0;min-width:0;padding:10px 3px;font-size:12px;border-radius:9px;text-align:center;letter-spacing:-.01em}
+    .cmp-tabs{flex-wrap:nowrap;gap:4px;margin-bottom:8px;margin-top:8px}
+    .cmp-tabs .cmp-tab{flex:1 1 0;min-width:0;padding:10px 3px;font-size:12px;border-radius:9px;text-align:center;letter-spacing:-.01em}
+    #vcTabs .cmp-tab{font-size:10.5px;padding:9px 2px}
     .cmp-period{font-size:10.5px;margin-bottom:9px}
     .cmp-grid{grid-template-columns:repeat(2,1fr);gap:8px}
     .cmp-tile{padding:10px 10px;border-radius:12px}
@@ -444,6 +445,13 @@
   <div class="card">
     <h2>🛍️ Ventes co — l'équipe qui vend</h2>
     <div class="card-sub" id="ventesCoSub">Déclarées dans SYNERGIA</div>
+    <div class="cmp-tabs" id="vcTabs">
+      <button class="cmp-tab active" data-tab="defi" onclick="setVcTab(this)">Défi en cours</button>
+      <button class="cmp-tab" data-tab="mois" onclick="setVcTab(this)">Mois</button>
+      <button class="cmp-tab" data-tab="trimestre" onclick="setVcTab(this)">Trimestre</button>
+      <button class="cmp-tab" data-tab="annee" onclick="setVcTab(this)">Année</button>
+      <button class="cmp-tab" data-tab="tout" onclick="setVcTab(this)">Tout</button>
+    </div>
     <div id="ventesCoBody" class="log-empty">En attente…</div>
   </div>
 
@@ -872,6 +880,55 @@ function renderCompare(){
 }
 function toggleCodes(){const d=document.getElementById('codesDetail'),t=document.getElementById('codesTog');if(!d)return;const open=d.style.display==='none';d.style.display=open?'block':'none';if(t)t.textContent=open?'－':'＋';}
 
+/* ============================================================
+   VENTES CO — classement des vendeurs par période
+   Le robot remonte l'historique COMPLET (tous les défis Synergia, terminés
+   ou en cours) : quand un défi est gagné et remplacé, rien n'est perdu.
+   ============================================================ */
+let VC_TAB='defi', VC_TOUCHED=false;
+function setVcTab(btn){VC_TAB=btn.dataset.tab;VC_TOUCHED=true;[...document.querySelectorAll('#vcTabs .cmp-tab')].forEach(b=>b.classList.toggle('active',b===btn));renderVentes();}
+function renderVentes(){
+  const vc=state.ventesCo, body=document.getElementById('ventesCoBody'), sub=document.getElementById('ventesCoSub');
+  if(!body||!sub)return;
+  const contribs=(vc&&Array.isArray(vc.contributions))?vc.contributions:null;
+  // Défi tout juste lancé (aucune vente déclarée) : on affiche le mois par défaut
+  if(!VC_TOUCHED&&VC_TAB==='defi'&&contribs&&vc.defi&&!contribs.some(c=>c.defi===vc.defi.title)){
+    VC_TAB='mois';
+    [...document.querySelectorAll('#vcTabs .cmp-tab')].forEach(b=>b.classList.toggle('active',b.dataset.tab==='mois'));
+  }
+  if(!vc||(!contribs&&!(vc.contributors&&vc.contributors.length))){
+    body.className='log-empty';body.textContent='Aucune vente co déclarée — à saisir dans SYNERGIA.';
+    sub.textContent='Déclarées dans SYNERGIA';return;}
+
+  let list=[],label='';
+  if(!contribs){ // ancien format (avant mise à jour du robot)
+    list=(vc.contributors||[]).slice();
+    label='Défi « '+(vc.title||'ventes')+' » · '+(vc.current??0)+'/'+(vc.target??'?');
+  }else{
+    const now=new Date(),y=now.getFullYear(),mi=now.getMonth(),defi=vc.defi||null;
+    let f;
+    if(VC_TAB==='defi'&&defi){ f=c=>c.defi===defi.title;
+      label='Défi « '+defi.title+' » · '+(defi.current??0)+'/'+(defi.target??'?')+' '+(defi.unit||'')+(defi.status==='completed'?' ✅ réussi':''); }
+    else if(VC_TAB==='mois'){ const p=curMonth(); f=c=>c.date.slice(0,7)===p; label=monthLabel(p); }
+    else if(VC_TAB==='trimestre'){ const q=Math.floor(mi/3);
+      f=c=>c.date.slice(0,4)===String(y)&&Math.floor((parseInt(c.date.slice(5,7),10)-1)/3)===q; label='Trimestre '+(q+1)+' · '+y; }
+    else if(VC_TAB==='annee'){ f=c=>c.date.slice(0,4)===String(y); label='Année '+y; }
+    else { f=()=>true; const d0=contribs.length?contribs[0].date:null;
+      label='Depuis le début'+(d0?(' ('+new Date(d0+'T00:00').toLocaleDateString('fr-FR',{month:'long',year:'numeric'})+')'):''); }
+    const sel=contribs.filter(f);
+    const by={}; for(const c of sel){by[c.name]=(by[c.name]||0)+c.amount;}
+    list=Object.entries(by).map(([name,total])=>({name,total})).sort((a,b)=>b.total-a.total);
+    const tot=sel.reduce((a,c)=>a+c.amount,0);
+    label+=' · '+tot+' vente'+(tot>1?'s':'');
+  }
+  sub.textContent=label;
+  if(!list.length){ body.className='log-empty';
+    body.textContent=(VC_TAB==='defi')?'Nouveau défi lancé — aucune vente déclarée pour l\'instant 💪':'Aucune vente déclarée sur cette période.';return;}
+  const md=['🥇','🥈','🥉'];
+  body.className='';
+  body.innerHTML=list.map((c,i)=>'<div class="lb-row"><div class="lb-rank">'+(md[i]||(i+1))+'</div><div class="lb-name">'+esc(c.name)+'</div><div class="lb-xp">'+c.total+' vente'+(c.total>1?'s':'')+'</div></div>').join('');
+}
+
 /* ---- Analyse multi-années sur une plage libre (même MM-JJ chaque année) ---- */
 function cmpAnchorDate(){const ds=state.entries.filter(e=>e.date).map(e=>e.date).sort();return ds.length?ymdToDate(ds[ds.length-1]):new Date();}
 function mPreset(which){
@@ -997,13 +1054,7 @@ function render(){
   if(rFlag){ if(bestAll&&lday&&bestAll.date===lday&&allPos.length>1){rFlag.style.display='block';rFlag.className='day-goal';rFlag.innerHTML='🎉 Nouveau record de CA battu : '+fmt(bestAll.ca)+' € le '+jour(bestAll.date)+' !';}
     else rFlag.style.display='none'; }
 
-  // Ventes co — vendeurs (déclarées dans SYNERGIA, résumé écrit par le robot)
-  const vc=state.ventesCo, vb=document.getElementById('ventesCoBody'), vs=document.getElementById('ventesCoSub');
-  if(vb&&vs){ if(!vc||!vc.contributors||!vc.contributors.length){vb.className='log-empty';vb.textContent='Aucune vente co déclarée pour le moment — à saisir dans SYNERGIA.';vs.textContent='Déclarées dans SYNERGIA';}
-    else{ vs.textContent='Défi « '+esc(vc.title||'ventes')+' » · '+(vc.current??0)+'/'+(vc.target??'?')+' '+esc(vc.unit||'');
-      const md=['🥇','🥈','🥉'];
-      vb.className='';
-      vb.innerHTML=vc.contributors.map((c,i)=>'<div class="lb-row"><div class="lb-rank">'+(md[i]||(i+1))+'</div><div class="lb-name">'+esc(c.name)+'</div><div class="lb-xp">'+c.total+' '+esc(vc.unit||'ventes')+'</div></div>').join(''); } }
+  renderVentes();
 
   const log=document.getElementById('log');
   const sorted=me.slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,25);

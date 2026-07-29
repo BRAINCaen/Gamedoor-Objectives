@@ -346,30 +346,52 @@ async function synGet(pathQ, key) {
   return { ok: false, error: 'endpoint API Synergia introuvable' };
 }
 
-// Lit le defi "ventes co" (declare manuellement dans Synergia) et ecrit un
+// Lit TOUS les defis "ventes co" de Synergia (en cours + termines) et ecrit un
 // resume SANS DONNEES SENSIBLES dans le RTDB Gamedoor -> affiche par le dashboard.
+// On agrege l'HISTORIQUE COMPLET des contributions (date + vendeur + quantite),
+// ce qui permet au dashboard de filtrer par periode et de survivre au
+// remplacement d'un defi termine par un nouveau.
 async function syncSynergiaVentes() {
   if (!SYN.readKey) { log('ℹ️  Ventes co : clé lecture Synergia absente → non mis à jour.'); return; }
-  const res = await synGet('/team_challenges?limit=100', SYN.readKey);
+  const res = await synGet('/team_challenges?limit=200', SYN.readKey);
   if (!res.ok) { log('⚠️ Ventes co : lecture Synergia échouée (' + (res.status || res.error) + ').'); return; }
   const items = res.body?.items || [];
   const sales = items.filter((c) => /sales/i.test(c.type || '') || /vente/i.test(c.unit || '') || /vente/i.test(c.title || ''));
-  const defi = sales.find((c) => c.status === 'active') || sales.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))[0];
-  if (!defi) { log('ℹ️  Ventes co : aucun défi "ventes" trouvé dans Synergia.'); return; }
+  if (!sales.length) { log('ℹ️  Ventes co : aucun défi "ventes" trouvé dans Synergia.'); return; }
 
-  const byName = {};
-  for (const c of (defi.contributions || [])) { const n = (c.userName || '?').trim(); byName[n] = (byName[n] || 0) + (Number(c.amount) || 0); }
-  const contributors = Object.entries(byName).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
+  // Toutes les contributions, tous defis confondus (date ISO courte + vendeur).
+  const contributions = [];
+  for (const c of sales) {
+    for (const x of (c.contributions || [])) {
+      const date = String(x.createdAt || '').slice(0, 10);
+      const amount = Number(x.amount) || 0;
+      const name = String(x.userName || '?').trim();
+      if (date && amount > 0) contributions.push({ date, name, amount, defi: c.title || '' });
+    }
+  }
+  contributions.sort((a, b) => a.date.localeCompare(b.date));
+
+  // Defi "en cours" : le plus recent des actifs, sinon le plus recent tout court.
+  const recent = (a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+  const actifs = sales.filter((c) => c.status === 'active').sort(recent);
+  const enCours = actifs[0] || sales.slice().sort(recent)[0];
+  const lite = (c) => ({ title: c.title || 'Ventes co', unit: c.unit || 'ventes', target: c.targetValue ?? null,
+    current: c.currentValue ?? null, status: c.status || null, createdAt: c.createdAt || null });
 
   const summary = {
-    title: defi.title || 'Ventes co', unit: defi.unit || 'ventes',
-    target: defi.targetValue ?? null, current: defi.currentValue ?? null, status: defi.status || null,
-    contributors, updatedAt: new Date().toISOString(),
+    defi: lite(enCours),
+    defis: sales.slice().sort(recent).map(lite),
+    contributions,
+    total: contributions.reduce((a, c) => a + c.amount, 0),
+    updatedAt: new Date().toISOString(),
   };
   await ensureAuth();
   await fetch(rtdbUrl('/state/ventesCo.json'), {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(summary),
-  }).then((r) => { if (r.ok) log(`🛍️ Ventes co Synergia synchronisées : ${contributors.length} vendeur(s), défi ${summary.current}/${summary.target}.`); else log('⚠️ Ventes co : écriture RTDB échouée ' + r.status); });
+  }).then((r) => {
+    if (r.ok) log(`🛍️ Ventes co : ${sales.length} défi(s), ${summary.total} vente(s) sur ${contributions.length} déclaration(s) · défi en cours « ${summary.defi.title} » ${summary.defi.current}/${summary.defi.target}.`);
+    else log('⚠️ Ventes co : écriture RTDB échouée ' + r.status);
+  });
 }
 const PALIERS = [
   { id: 'bronze', xp: 300, cfgKey: 'targetBronze', def: 27000, label: 'Bronze' },
