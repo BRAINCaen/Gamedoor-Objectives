@@ -647,6 +647,7 @@ function attachFB(){
     state.roster=normRoster(v.roster)||DEFAULT_ROSTER.map(r=>Object.assign({},r));
     state.entries=v.entries?Object.keys(v.entries).map(k=>Object.assign({id:k},v.entries[k])):[];
     state.ventesCo=v.ventesCo||null;
+    state.ventesCoLegacy=v.ventesCoLegacy||null;
     if(v.config===undefined){db.ref('state/config').set(state.config);}
     if(v.roster===undefined){db.ref('state/roster').set(state.roster);}
     syncPill('on');
@@ -913,12 +914,17 @@ function renderVentes(){
     else if(VC_TAB==='trimestre'){ const q=Math.floor(mi/3);
       f=c=>c.date.slice(0,4)===String(y)&&Math.floor((parseInt(c.date.slice(5,7),10)-1)/3)===q; label='Trimestre '+(q+1)+' · '+y; }
     else if(VC_TAB==='annee'){ f=c=>c.date.slice(0,4)===String(y); label='Année '+y; }
-    else { f=()=>true; const d0=contribs.length?contribs[0].date:null;
-      label='Depuis le début'+(d0?(' ('+new Date(d0+'T00:00').toLocaleDateString('fr-FR',{month:'long',year:'numeric'})+')'):''); }
+    else { f=()=>true; label='Depuis le début'; }
     const sel=contribs.filter(f);
     const by={}; for(const c of sel){by[c.name]=(by[c.name]||0)+c.amount;}
+    // Onglet "Tout" : on ajoute l'historique anterieur aux defis Synergia
+    const lg=state.ventesCoLegacy;
+    if(VC_TAB==='tout'&&lg&&Array.isArray(lg.contributors)){
+      for(const c of lg.contributors){by[c.name]=(by[c.name]||0)+(Number(c.total)||0);}
+      label='Depuis le début · historique inclus';
+    }
     list=Object.entries(by).map(([name,total])=>({name,total})).sort((a,b)=>b.total-a.total);
-    const tot=sel.reduce((a,c)=>a+c.amount,0);
+    const tot=Object.values(by).reduce((a,v)=>a+v,0);
     label+=' · '+tot+' vente'+(tot>1?'s':'');
   }
   sub.textContent=label;

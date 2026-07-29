@@ -359,16 +359,34 @@ async function syncSynergiaVentes() {
   const sales = items.filter((c) => /sales/i.test(c.type || '') || /vente/i.test(c.unit || '') || /vente/i.test(c.title || ''));
   if (!sales.length) { log('ℹ️  Ventes co : aucun défi "ventes" trouvé dans Synergia.'); return; }
 
-  // Toutes les contributions, tous defis confondus (date ISO courte + vendeur).
+  // Table uid -> PSEUDO (displayName Synergia). On n'affiche JAMAIS le
+  // nom/prenom stocke dans la contribution : toujours le pseudo choisi par
+  // la personne dans Synergia.
+  const pseudo = {};
+  try {
+    let tok = null;
+    do {
+      const u = await synGet('/users?limit=300' + (tok ? '&pageToken=' + encodeURIComponent(tok) : ''), SYN.readKey);
+      if (!u.ok) break;
+      for (const x of (u.body?.items || [])) if (x.id && x.displayName) pseudo[x.id] = String(x.displayName).trim();
+      tok = u.body?.nextPageToken || null;
+    } while (tok);
+  } catch { /* si indispo : on retombe sur le nom de la contribution */ }
+
+  // Toutes les contributions, tous defis confondus (date ISO courte + pseudo).
   const contributions = [];
+  const sansPseudo = new Set();
   for (const c of sales) {
     for (const x of (c.contributions || [])) {
       const date = String(x.createdAt || '').slice(0, 10);
       const amount = Number(x.amount) || 0;
-      const name = String(x.userName || '?').trim();
+      const uid = x.oderId || x.userId || '';
+      const name = pseudo[uid] || String(x.userName || '?').trim();
+      if (!pseudo[uid] && uid) sansPseudo.add(uid);
       if (date && amount > 0) contributions.push({ date, name, amount, defi: c.title || '' });
     }
   }
+  if (sansPseudo.size) log(`ℹ️  Ventes co : ${sansPseudo.size} contributeur(s) sans pseudo Synergia → nom de la contribution utilisé.`);
   contributions.sort((a, b) => a.date.localeCompare(b.date));
 
   // Defi "en cours" : le plus recent des actifs, sinon le plus recent tout court.
