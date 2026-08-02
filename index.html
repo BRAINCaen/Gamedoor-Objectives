@@ -195,6 +195,10 @@
   .cmp-tab{background:var(--bg-card);border:1px solid var(--line-s);color:var(--soft);border-radius:11px;padding:13px 26px;font-family:'Manrope';font-size:17px;font-weight:800;cursor:pointer;transition:all .18s}
   .cmp-tab:hover{border-color:var(--gold);color:var(--gold)}
   .cmp-tab.active{background:linear-gradient(135deg,var(--gold),var(--gold-br));color:var(--bg-deep);border-color:var(--gold-br);box-shadow:0 8px 22px -10px rgba(232,177,74,.6)}
+  .cmp-nav{font-family:'JetBrains Mono';font-size:19px;line-height:1;padding:11px 16px;font-weight:700}
+  .cmp-nav:disabled{opacity:.3;cursor:default;border-color:var(--line-s);color:var(--soft)}
+  .cmp-nav:disabled:hover{border-color:var(--line-s);color:var(--soft)}
+  .cmp-back{background:none;border:none;color:var(--gold);font-family:'Manrope';font-weight:800;font-size:12px;cursor:pointer;padding:0 0 0 8px;text-decoration:underline}
   .cmp-period{font-size:15px;color:var(--soft);margin-bottom:18px;font-weight:600}
   .cmp-period b{color:var(--gold)}
   .cmp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
@@ -280,7 +284,8 @@
     #cmpCard .card-sub{display:none}
     /* onglets : les 5 tiennent sur une ligne, largeurs egales */
     .cmp-tabs{flex-wrap:nowrap;gap:4px;margin-bottom:8px;margin-top:8px}
-    .cmp-tabs .cmp-tab{flex:1 1 0;min-width:0;padding:10px 3px;font-size:12px;border-radius:9px;text-align:center;letter-spacing:-.01em}
+    .cmp-tabs .cmp-tab{flex:1 1 0;min-width:0;padding:10px 3px;font-size:11.5px;border-radius:9px;text-align:center;letter-spacing:-.02em}
+    .cmp-tabs .cmp-nav{flex:0 0 auto;padding:10px 8px;font-size:15px}
     #vcTabs .cmp-tab{font-size:10.5px;padding:9px 2px}
     .cmp-period{font-size:10.5px;margin-bottom:9px}
     .cmp-grid{grid-template-columns:repeat(2,1fr);gap:8px}
@@ -425,6 +430,8 @@
       <button class="cmp-tab" data-tab="mois" onclick="setCmpTab(this)">Mois</button>
       <button class="cmp-tab" data-tab="trimestre" onclick="setCmpTab(this)">Trimestre</button>
       <button class="cmp-tab" data-tab="annee" onclick="setCmpTab(this)">Année</button>
+      <button class="cmp-tab cmp-nav" id="cmpPrev" onclick="cmpShift(-1)" title="Période précédente" aria-label="Période précédente">‹</button>
+      <button class="cmp-tab cmp-nav" id="cmpNext" onclick="cmpShift(1)" title="Période suivante" aria-label="Période suivante">›</button>
     </div>
     <div class="cmp-period" id="cmpPeriod">—</div>
     <div class="cmp-grid" id="cmpGrid"></div>
@@ -773,7 +780,7 @@ function latestDay(){const ds=[...new Set(monthEntries().map(e=>e.date))].sort()
 let CMP_TAB='jour';
 function ymdToDate(s){return new Date(s+'T00:00');}
 function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x;}
-function computePeriods(anchor,tab){
+function computePeriods(anchor,tab,complete){
   const D=anchor; let cs,ce,ps,pe,label,prevLabel;
   const fD=(x,o)=>x.toLocaleDateString('fr-FR',o);
   if(tab==='jour'){
@@ -783,24 +790,24 @@ function computePeriods(anchor,tab){
   }else if(tab==='semaine'){
     const dow=(D.getDay()+6)%7, mon=addDays(D,-dow);
     cs=mon; ce=D; ps=addDays(mon,-364); pe=addDays(D,-364);
-    label='semaine du '+fD(mon,{day:'numeric',month:'long'})+' (jusqu\'à '+fD(D,{weekday:'long'})+')';
+    label='semaine du '+fD(mon,{day:'numeric',month:'long'})+(complete?'':' (jusqu\'à '+fD(D,{weekday:'long'})+')');
     prevLabel='vs même semaine '+ps.getFullYear();
   }else if(tab==='mois'){
     cs=new Date(D.getFullYear(),D.getMonth(),1); ce=D;
     ps=new Date(D.getFullYear()-1,D.getMonth(),1); pe=new Date(D.getFullYear()-1,D.getMonth(),D.getDate());
-    label=fD(D,{month:'long',year:'numeric'})+' (cumul au '+D.getDate()+')';
-    prevLabel='vs '+fD(ps,{month:'long',year:'numeric'})+' (même portion)';
+    label=fD(D,{month:'long',year:'numeric'})+(complete?'':' (cumul au '+D.getDate()+')');
+    prevLabel='vs '+fD(ps,{month:'long',year:'numeric'})+(complete?'':' (même portion)');
   }else if(tab==='trimestre'){
     const q=Math.floor(D.getMonth()/3), qm=q*3;
     cs=new Date(D.getFullYear(),qm,1); ce=D;
     ps=new Date(D.getFullYear()-1,qm,1); pe=new Date(D.getFullYear()-1,D.getMonth(),D.getDate());
-    label='T'+(q+1)+' '+D.getFullYear()+' (cumul)';
-    prevLabel='vs T'+(q+1)+' '+(D.getFullYear()-1)+' (même portion)';
+    label='T'+(q+1)+' '+D.getFullYear()+(complete?'':' (cumul)');
+    prevLabel='vs T'+(q+1)+' '+(D.getFullYear()-1)+(complete?'':' (même portion)');
   }else{ // annee
     cs=new Date(D.getFullYear(),0,1); ce=D;
     ps=new Date(D.getFullYear()-1,0,1); pe=new Date(D.getFullYear()-1,D.getMonth(),D.getDate());
-    label='Année '+D.getFullYear()+' (cumul au '+fD(D,{day:'numeric',month:'long'})+')';
-    prevLabel='vs '+(D.getFullYear()-1)+' (même portion)';
+    label='Année '+D.getFullYear()+(complete?'':' (cumul au '+fD(D,{day:'numeric',month:'long'})+')');
+    prevLabel='vs '+(D.getFullYear()-1)+(complete?'':' (même portion)');
   }
   return {curStart:ymd(cs),curEnd:ymd(ce),prevStart:ymd(ps),prevEnd:ymd(pe),label,prevLabel};
 }
@@ -809,7 +816,25 @@ function periodAgg(startYMD,endYMD){
   const ca=sum(es,e=>e.ca),ses=sum(es,e=>e.sessions),jo=sum(es,e=>e.players),av=sum(es,e=>e.avis);
   return {ca,sessions:ses,joueurs:jo,avis:av,days:es.length,panier:ses>0?ca/ses:0};
 }
-function setCmpTab(btn){CMP_TAB=btn.dataset.tab;[...document.querySelectorAll('#cmpTabs .cmp-tab')].forEach(b=>b.classList.toggle('active',b===btn));renderCompare();}
+function setCmpTab(btn){CMP_TAB=btn.dataset.tab;CMP_OFFSET=0;[...document.querySelectorAll('#cmpTabs .cmp-tab:not(.cmp-nav)')].forEach(b=>b.classList.toggle('active',b===btn));renderCompare();}
+
+/* ---- Navigation période par période (‹ ›) ----
+   CMP_OFFSET = 0 → période en cours ; -1 → la précédente, etc.
+   Pour une période passée on cale sur la FIN de la période (mois complet,
+   semaine complète…) au lieu du « cumul au jour J ». */
+let CMP_OFFSET=0;
+function cmpShift(n){ CMP_OFFSET=Math.min(0,CMP_OFFSET+n); renderCompare(); }
+function cmpReset(){ CMP_OFFSET=0; renderCompare(); }
+function shiftAnchor(anchor,tab,off){
+  if(!off) return anchor;
+  const y=anchor.getFullYear(), m=anchor.getMonth();
+  let d;
+  if(tab==='jour'){ d=new Date(anchor); d.setDate(d.getDate()+off); return d; }
+  if(tab==='semaine'){ d=new Date(anchor); d.setDate(d.getDate()+off*7); const dow=(d.getDay()+6)%7; d.setDate(d.getDate()+(6-dow)); return d; }
+  if(tab==='mois'){ return new Date(y,m+off+1,0); }                    // dernier jour du mois visé
+  if(tab==='trimestre'){ const q=Math.floor((m+off*3)/3); return new Date(y,q*3+3,0); }
+  return new Date(y+off,11,31);                                        // 31 décembre de l'année visée
+}
 
 /* Objectif CA d'un mois donné (palier « Argent » = objectif de référence).
    Respecte les objectifs automatiques par saisonnalité s'ils sont activés. */
@@ -842,10 +867,21 @@ function renderCompare(){
   const grid=document.getElementById('cmpGrid'); if(!grid)return;
   const allDates=state.entries.filter(e=>e.date).map(e=>e.date).sort();
   const anchorYMD=allDates.length?allDates[allDates.length-1]:todayStr();
-  const anchor=ymdToDate(anchorYMD);
-  const P=computePeriods(anchor,CMP_TAB);
+  const anchor=shiftAnchor(ymdToDate(anchorYMD),CMP_TAB,CMP_OFFSET);
+  const P=computePeriods(anchor,CMP_TAB,CMP_OFFSET!==0);   // période passée = complète
   const tn=document.getElementById('cmpTabName'); if(tn)tn.textContent=TAB_NAMES[CMP_TAB]||'';
-  document.getElementById('cmpPeriod').innerHTML='📅 <b>'+P.label+'</b> &nbsp;·&nbsp; '+P.prevLabel;
+  // "Trimestre" est trop long pour le bouton sur petit écran
+  const bt=document.querySelector('#cmpTabs .cmp-tab[data-tab="trimestre"]');
+  if(bt){const w=(typeof window!=='undefined'&&window.matchMedia)?window.matchMedia('(max-width:640px)').matches:false;
+    const want=w?'Trim.':'Trimestre'; if(bt.textContent!==want)bt.textContent=want;}
+  // Flèches : pas de futur ; on s'arrête à la 1re donnée connue
+  const first=allDates.length?allDates[0]:null;
+  const bN=document.getElementById('cmpNext'), bP=document.getElementById('cmpPrev');
+  if(bN)bN.disabled=CMP_OFFSET>=0;
+  if(bP)bP.disabled=!!(first&&P.curStart<=first);
+  const annee=(CMP_TAB==='jour'||CMP_TAB==='semaine')&&CMP_OFFSET!==0?(' '+anchor.getFullYear()):'';
+  document.getElementById('cmpPeriod').innerHTML='📅 <b>'+P.label+annee+'</b> &nbsp;·&nbsp; '+P.prevLabel+
+    (CMP_OFFSET!==0?' <button class="cmp-back" onclick="cmpReset()">⟲ revenir à maintenant</button>':'');
   const cur=periodAgg(P.curStart,P.curEnd), prev=periodAgg(P.prevStart,P.prevEnd);
   const hasPrev=prev.days>0;
   const TG=periodTargets(CMP_TAB,anchor);
