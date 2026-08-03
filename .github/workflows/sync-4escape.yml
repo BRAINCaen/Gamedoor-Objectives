@@ -8,8 +8,14 @@ on:
     # Cible ~00h30 Paris (crons GitHub en UTC). GitHub RETARDE souvent les crons
     # de 30 min a 2h : le script accepte donc toute la fenetre 0h-9h de Paris et
     # dedoublonne via lastSync. Plusieurs declenchements pour la redondance :
-    - cron: '33 22 * * *'   # 00:33 Paris (ete) / 23:33 (hiver, hors fenetre -> saute)
-    - cron: '33 23 * * *'   # 01:33 Paris (ete) / 00:33 (hiver)
+    # NB : GitHub declenche les crons AVEC DU RETARD (observe : ~1 h de facon
+    # tres reguliere). On programme donc plusieurs creneaux en amont pour qu'au
+    # moins un tombe entre 00h et 01h de Paris ; l'anti-doublon (lastSync)
+    # garantit qu'un seul fait reellement le travail.
+    - cron: '41 21 * * *'   # a l'heure : 23:41 Paris (saute) · +1 h : 00:41 Paris ✔
+    - cron: '11 22 * * *'   # a l'heure : 00:11 Paris ✔ · +1 h : 01:11 Paris ✔
+    - cron: '33 22 * * *'   # a l'heure : 00:33 Paris ✔ · +1 h : 01:33 Paris ✔
+    - cron: '33 23 * * *'   # filet hiver : 00:33 Paris (hiver) / 01:33 (ete)
     - cron: '33 4 * * *'    # rattrapage matin : 06:33 (ete) / 05:33 (hiver)
   workflow_dispatch:
     inputs:
