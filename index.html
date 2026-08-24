@@ -528,7 +528,6 @@
       <div class="set-actions">
         <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ Exporter (CSV)</button>
         <button class="btn btn-ghost btn-sm" onclick="resetMonth()">↺ Nouveau mois</button>
-        <button class="btn btn-ghost btn-sm" onclick="resetAll()" style="border-color:rgba(248,113,113,.4);color:var(--red)">⌫ Tout effacer</button>
       </div>
     </div>
   </details>
@@ -1162,9 +1161,9 @@ function resetMonth(){if(!confirm('Nouveau mois : effacer les saisies du mois en
   if(fb()){const upd={};state.entries.forEach(e=>{if(monthKey(e.date)===mk)upd[e.id]=null;});db.ref('state/entries').update(upd);}
   else{state.entries=state.entries.filter(e=>monthKey(e.date)!==mk);commitLocal();}
   toast('↺','Nouveau mois démarré');}
-function resetAll(){if(!confirm('Effacer TOUTES les saisies (toutes périodes) ? Irréversible.'))return;
-  if(fb())db.ref('state/entries').remove(); else{state.entries=[];commitLocal();}
-  toast('⌫','Données effacées');}
+/* resetAll() supprime le 24/08/2026 : les regles Firebase interdisent desormais
+   l'effacement global de /state/entries (2164 journees depuis 2020). Voir
+   SECURITE-FIREBASE.md. Pour retirer une journee : la supprimer a la cle. */
 function exportCSV(){
   const rows=[['date','personnage','ca','sessions','ventes_co','avis']];
   state.entries.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>rows.push([e.date,e.gm,e.ca,e.sessions,e.options,e.avis]));

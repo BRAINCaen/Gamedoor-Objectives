@@ -1,0 +1,67 @@
+// ===========================================================================
+// GAMEDOOR OBJECTIVES — regles de securite Realtime Database
+//
+// Avant : lecture ET ecriture ouvertes a tous (alerte Firebase du 24/08/2026).
+// Apres : rien n'est lisible ni ecrivable sans etre authentifie.
+//
+// /!\ PRE-REQUIS : le dashboard (index.html) et le robot (sync-4escape/scrape.mjs)
+//     se connectent tous les deux en ANONYME. L'authentification anonyme doit
+//     donc etre ACTIVEE dans Firebase > Authentication AVANT de publier ces
+//     regles, sinon l'ecran et la synchro nocturne tombent en erreur.
+//     Voir SECURITE-FIREBASE.md.
+// ===========================================================================
+{
+  "rules": {
+
+    // Racine verrouillee : aucune ecriture sauvage hors de /state.
+    ".read": false,
+    ".write": false,
+
+    "state": {
+
+      // Le dashboard lit /state en entier -> le .read doit etre pose ici.
+      ".read": "auth != null",
+
+      // --- Reglages / objectifs, modifiables depuis l'ecran Reglages ---
+      "config":         { ".write": "auth != null" },
+      "roster":         { ".write": "auth != null" },
+      "ventesCo":       { ".write": "auth != null" },
+      "ventesCoLegacy": { ".write": "auth != null" },
+
+      // --- Memos du robot (lastSync, googleReviews, synergiaXp) ---
+      "autoMeta":       { ".write": "auth != null" },
+
+      // --- Historique : 2164 journees depuis 2020 ---
+      "entries": {
+        // Pas de .write a ce niveau : impossible d'ecraser ou d'effacer
+        // l'historique complet en une seule requete. Seules les ecritures
+        // jour par jour passent (regle $jour ci-dessous).
+
+        "$jour": {
+          ".write": "auth != null && $jour.matches(/^auto-[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+
+          // Une journee doit rester une journee : forme minimale imposee.
+          ".validate": "newData.hasChildren(['date', 'ca', 'sessions'])",
+
+          "date":     { ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)" },
+          "ca":       { ".validate": "newData.isNumber() && newData.val() >= -100000 && newData.val() <= 1000000" },
+          "sessions": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 500" },
+          "players":  { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 5000" },
+          "avis":     { ".validate": "newData.isNumber() && newData.val() >= -1000 && newData.val() <= 1000" },
+          "options":  { ".validate": "newData.isNumber()" },
+          "gm":       { ".validate": "newData.isString() && newData.val().length <= 80" },
+          "source":   { ".validate": "newData.isString() && newData.val().length <= 60" },
+          "syncedAt": { ".validate": "newData.isString() && newData.val().length <= 40" },
+          "ts":       { ".validate": "newData.isNumber()" },
+          "detail":   { ".validate": "newData.hasChildren()" },
+
+          // detail.* et champs futurs : libres.
+          "$autre":   { ".validate": true }
+        }
+      },
+
+      // Aucune autre branche que celles listees ci-dessus.
+      "$inconnu": { ".validate": false }
+    }
+  }
+}
