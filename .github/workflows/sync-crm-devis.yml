@@ -1,0 +1,66 @@
+# Synchro des DEVIS 4escape -> CRM Supabase.
+# ⚠️ EMPLACEMENT dans le dépôt : .github/workflows/sync-crm-devis.yml
+#    (le dossier sync-devis/ va, lui, à la racine du dépôt Gamedoor-Objectives)
+#
+# Secrets requis (Settings → Secrets and variables → Actions) :
+#   FE_BASE, FE_USER, FE_PASS        (déjà présents pour sync-4escape)
+#   SUPABASE_URL, SUPABASE_SERVICE_KEY   (à AJOUTER — la clé service_role)
+#   QUOTES_PATH                       (optionnel, défaut /admin/statistics/quotes)
+
+name: Synchro devis 4escape -> CRM
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "1 = analyser sans rien écrire (test)"
+        required: false
+        default: '0'
+  repository_dispatch:
+    types: [sync-devis]          # déclenché par le bouton du CRM (via Netlify)
+  schedule:
+    - cron: '20 4 * * *'         # ~06:20 Paris (été) — filet quotidien
+
+concurrency:
+  group: sync-crm-devis
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        working-directory: sync-devis
+        run: npm install
+
+      - name: Install Chromium
+        working-directory: sync-devis
+        run: npx playwright install --with-deps chromium
+
+      - name: Run sync
+        working-directory: sync-devis
+        env:
+          FE_BASE:              ${{ secrets.FE_BASE }}
+          FE_USER:              ${{ secrets.FE_USER }}
+          FE_PASS:              ${{ secrets.FE_PASS }}
+          QUOTES_PATH:          ${{ secrets.QUOTES_PATH }}
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SYNC_SOURCE: ${{ github.event_name == 'schedule' && 'cron' || (github.event_name == 'repository_dispatch' && 'bouton' || 'manuel') }}
+        run: node sync.mjs ${{ github.event.inputs.dry_run == '1' && '--dry-run' || '' }}
+
+      - name: Upload debug on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-sync-devis
+          path: sync-devis/debug/
+          if-no-files-found: ignore
+          retention-days: 7

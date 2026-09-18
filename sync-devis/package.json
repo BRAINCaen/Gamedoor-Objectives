@@ -1,0 +1,16 @@
+{
+  "name": "gamedoor-crm-sync-devis",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Synchro des devis B2B 4escape vers le CRM Supabase (GAMEDOOR·41).",
+  "scripts": {
+    "sonde": "node scrape-devis.mjs --headful",
+    "sonde:headless": "node scrape-devis.mjs"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "playwright": "^1.48.0",
+    "@supabase/supabase-js": "^2.45.0"
+  }
+}
