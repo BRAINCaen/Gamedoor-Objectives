@@ -115,7 +115,12 @@ function rapport(devis, entreprises, plan, seuils) {
   // charge l'état connu de Supabase (sauf test pur sans identifiants)
   let existants = new Map();
   const store = (!DRY || (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY))
-    ? await import('./lib/store.mjs').then((m) => m.makeStore()).catch(() => null)
+    ? await import('./lib/store.mjs').then((m) => m.makeStore()).catch((e) => {
+        // Ne jamais avaler la cause : sinon on croit a des identifiants manquants.
+        log(`⚠️  Connexion Supabase impossible : ${e && e.message ? e.message : e}`);
+        if (e && e.stack) log(String(e.stack).split(/\n/).slice(0, 4).join(' | '));
+        return null;
+      })
     : null;
   if (store) { existants = await store.chargerDevis(); log(`État Supabase : ${existants.size} devis déjà connus.`); }
   else log('(pas de connexion Supabase : diff calculé comme si la base était vide)');
