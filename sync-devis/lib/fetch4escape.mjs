@@ -17,8 +17,93 @@ const CFG = () => ({
 
 const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
+// Libellés possibles du bouton d'export : 4escape a pu changer l'intitulé.
+const EXPORT_SEL = [
+  'button:has-text("Export CSV")', 'a:has-text("Export CSV")',
+  'button:has-text("Exporter")',   'a:has-text("Exporter")',
+  'button:has-text("Export")',     'a:has-text("Export")',
+  'button:has-text("CSV")',        'a:has-text("CSV")',
+].join(', ');
+
+async function hasExport(page) {
+  try { return (await page.locator(EXPORT_SEL).count()) > 0; } catch { return false; }
+}
+
+// Photographie la page pour comprendre après coup (uploadé en artefact par le workflow).
+async function snapshot(page, dir, nom) {
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    await page.screenshot({ path: path.join(dir, nom + '.png'), fullPage: true }).catch(() => {});
+    fs.writeFileSync(path.join(dir, nom + '.html'), await page.content(), 'utf8');
+  } catch { /* le debug ne doit jamais faire échouer la synchro */ }
+}
+
+// Liste ce que la page propose réellement — pour que l'erreur soit exploitable.
+async function inventaire(page) {
+  return page.evaluate(() => {
+    const t = (e) => (e.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    const uniq = (a) => [...new Set(a.filter(Boolean))].slice(0, 40);
+    return {
+      url: location.pathname,
+      boutons: uniq([...document.querySelectorAll('button')].map(t)),
+      liens: uniq([...document.querySelectorAll('a')]
+        .map((a) => (t(a) ? t(a) + ' -> ' + a.getAttribute('href') : ''))),
+    };
+  });
+}
+
+// Parcourt le menu d'administration à la recherche de l'écran des devis.
+async function decouvrirDevis(page, base, debugDir) {
+  const vus = new Set();
+  const candidats = [];
+
+  for (const p of ['/admin', '/admin/statistics', '/admin/orders']) {
+    try {
+      await page.goto(base + p, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      await page.waitForTimeout(500);
+      const liens = await page.evaluate(() =>
+        [...document.querySelectorAll('a')].map((a) => ({
+          href: a.getAttribute('href') || '',
+          txt: (a.textContent || '').replace(/\s+/g, ' ').trim(),
+        })));
+      for (const l of liens) {
+        if (!l.href.startsWith('/admin')) continue;
+        const cle = norm(l.txt) + '|' + l.href;
+        if (vus.has(cle)) continue;
+        vus.add(cle);
+        if (/devis|quote/.test(norm(l.txt)) || /devis|quote/.test(l.href.toLowerCase()))
+          candidats.push(l.href);
+      }
+    } catch { /* page absente : on continue */ }
+  }
+
+  // Chemins connus, testés même si aucun lien ne les mentionne.
+  for (const p of ['/admin/statistics/quotes', '/admin/quotes', '/admin/orders',
+                   '/admin/statistics/orders', '/admin/devis'])
+    if (!candidats.includes(p)) candidats.push(p);
+
+  const rapport = [];
+  for (const href of candidats.slice(0, 12)) {
+    try {
+      await page.goto(base + href, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+      await page.waitForTimeout(400);
+      if (/\/login(\?|$)/.test(page.url())) { rapport.push(`${href} -> redirige vers /login`); continue; }
+      if (await hasExport(page)) {
+        rapport.push(`${href} -> ✅ bouton d'export TROUVÉ`);
+        await snapshot(page, debugDir, 'page-devis-trouvee');
+        return { href, rapport };
+      }
+      rapport.push(`${href} -> page ok, mais aucun bouton d'export`);
+    } catch (e) {
+      rapport.push(`${href} -> inaccessible (${e.message.split('\n')[0].slice(0, 60)})`);
+    }
+  }
+  return { href: null, rapport };
+}
+
 async function doExport(page, wantLabel, debugDir) {
-  await page.locator('button:has-text("Export CSV"), a:has-text("Export CSV")').first().click();
+  await page.locator(EXPORT_SEL).first().click();
   await page.waitForTimeout(600);
   const picked = await page.evaluate((want) => {
     const n = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -31,7 +116,12 @@ async function doExport(page, wantLabel, debugDir) {
     }
     return false;
   }, norm(wantLabel));
-  if (!picked) throw new Error(`Type d'export « ${wantLabel} » introuvable dans la modale.`);
+  if (!picked) {
+    await snapshot(page, debugDir, 'modale-export');
+    const inv = await inventaire(page);
+    throw new Error(`Type d'export « ${wantLabel} » introuvable dans la modale.\n` +
+                    `Boutons visibles : ${inv.boutons.join(' | ') || '(aucun)'}`);
+  }
   await page.waitForTimeout(400);
   const validate = page.locator(
     'button:has-text("Exporter"), button:has-text("Télécharger"), button:has-text("Valider"), button:has-text("Confirmer")'
@@ -69,13 +159,38 @@ export async function fetch4escape() {
     await page.goto(cfg.base + cfg.quotesPath, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
     await page.waitForTimeout(800);
-    if (/\/login(\?|$)/.test(page.url())) throw new Error(`La liste Devis (${cfg.quotesPath}) redirige vers /login.`);
-    if (!(await page.locator('button:has-text("Export CSV"), a:has-text("Export CSV")').count()))
-      throw new Error(`Pas de bouton « Export CSV » sur ${cfg.quotesPath} — définis QUOTES_PATH.`);
+
+    let chemin = cfg.quotesPath;
+    const redirige = /\/login(\?|$)/.test(page.url());
+
+    if (redirige || !(await hasExport(page))) {
+      // Le chemin configuré ne convient pas : on cherche nous-mêmes.
+      await snapshot(page, cfg.debugDir, 'page-configuree');
+      const inv = await inventaire(page);
+      console.log(`⚠️  ${cfg.quotesPath} : pas de bouton d'export. Recherche automatique…`);
+      console.log(`    boutons vus : ${inv.boutons.join(' | ') || '(aucun)'}`);
+
+      const { href, rapport } = await decouvrirDevis(page, cfg.base, cfg.debugDir);
+      console.log('    exploration :');
+      rapport.forEach((l) => console.log('      ' + l));
+
+      if (!href)
+        throw new Error(
+          `Écran des devis introuvable.\nChemins testés :\n  ${rapport.join('\n  ')}\n\n` +
+          `➜ Ouvre la liste des devis dans 4escape et donne l'URL exacte, ` +
+          `puis mets-la dans le secret QUOTES_PATH (ex. /admin/statistics/quotes).`);
+
+      chemin = href;
+      console.log(`✅ Écran des devis trouvé : ${chemin}`);
+      console.log(`   (fige-le dans le secret QUOTES_PATH pour éviter cette recherche)`);
+    }
 
     const resume = await doExport(page, 'entetes de commande', cfg.debugDir);
     const detail = await doExport(page, 'lignes de commande', cfg.debugDir);
-    return { resume, detail };
+    return { resume, detail, quotesPath: chemin };
+  } catch (e) {
+    await snapshot(page, cfg.debugDir, 'echec');
+    throw e;
   } finally {
     await browser.close();
   }
