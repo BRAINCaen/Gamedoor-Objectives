@@ -102,16 +102,43 @@ async function decouvrirDevis(page, base, debugDir) {
   return { href: null, rapport };
 }
 
+// La modale d'export de 4escape reste ouverte apres un export et intercepte
+// tous les clics suivants : il faut la refermer entre les deux exports.
+async function closeModal(page) {
+  if (!(await page.locator('.modal.show').count().catch(() => 0))) return;
+  await page.locator('.modal.show [data-dismiss="modal"]').first()
+            .click({ timeout: 5000 }).catch(() => {});
+  await page.waitForFunction(() => !document.querySelector('.modal.show'),
+                             null, { timeout: 8000 }).catch(() => {});
+  // le voile gris survit parfois a la modale et continue de bloquer
+  await page.waitForFunction(() => !document.querySelector('.modal-backdrop'),
+                             null, { timeout: 5000 }).catch(() => {});
+  await page.waitForTimeout(250);
+}
+
+// Cible la modale d'export ; la page en contient une autre (« Actions groupees »)
+// dont le bouton submit ne doit surtout pas etre confondu avec « Exporter ».
+async function modaleExport(page) {
+  const precise = page.locator('#modal-order-export');
+  if (await precise.count().catch(() => 0)) return precise.first();
+  return page.locator('.modal.show').first();
+}
+
 async function doExport(page, wantLabel, debugDir) {
+  await closeModal(page);
   await page.locator(EXPORT_SEL).first().click();
-  await page.waitForTimeout(600);
+  await page.waitForFunction(() => document.querySelector('.modal.show'),
+                             null, { timeout: 15000 });
+  await page.waitForTimeout(500);
   const picked = await page.evaluate((want) => {
     const n = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-    for (const sel of document.querySelectorAll('select')) {
+    const root = document.querySelector('#modal-order-export') ||
+                 document.querySelector('.modal.show') || document;
+    for (const sel of root.querySelectorAll('select')) {
       const opt = [...sel.options].find((o) => n(o.textContent).includes(want));
       if (opt) { sel.value = opt.value; sel.dispatchEvent(new Event('change', { bubbles: true })); return true; }
     }
-    for (const el of document.querySelectorAll('li,a,div,span,option')) {
+    for (const el of root.querySelectorAll('li,a,div,span,option')) {
       if (n(el.textContent).includes(want)) { el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); el.click?.(); return true; }
     }
     return false;
@@ -123,15 +150,17 @@ async function doExport(page, wantLabel, debugDir) {
                     `Boutons visibles : ${inv.boutons.join(' | ') || '(aucun)'}`);
   }
   await page.waitForTimeout(400);
-  const validate = page.locator(
-    'button:has-text("Exporter"), button:has-text("Télécharger"), button:has-text("Valider"), button:has-text("Confirmer")'
-  ).last();
+  const modal = await modaleExport(page);
+  const validate = modal.locator(
+    'button[type="submit"], button:has-text("Exporter"), button:has-text("Télécharger"), button:has-text("Valider")'
+  ).first();
   const [download] = await Promise.all([
     page.waitForEvent('download', { timeout: 120000 }),
     validate.click(),
   ]);
   const saved = path.join(debugDir, download.suggestedFilename() || 'export.csv');
   await download.saveAs(saved);
+  await closeModal(page);   // laisse la page prete pour l'export suivant
   return fs.readFileSync(saved, 'utf8');
 }
 
