@@ -7,6 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 import { normSociete, iso } from './csv.mjs';
 import { STATUTS_HONORES, STATUT_CRM } from './transform.mjs';
 import { scoreValeur, scorePotentiel } from './score.mjs';
+import { scoreFinal } from './engagement.mjs';
 
 const CHUNK = 500;
 const chunk = (arr, n) => { const o = []; for (let i = 0; i < arr.length; i += n) o.push(arr.slice(i, i + n)); return o; };
@@ -130,26 +131,52 @@ export function makeStore() {
     }
 
     // 3) PROSPECTS (toutes les sociétés) — remplace le bloc note, garde le reste
-    const proExist = new Map((await fetchAll('prospects', 'id,societe,notes,date_relance')).map((p) => [normSociete(p.societe), p]));
+    // On relit aussi les coordonnées : le score tient compte de la qualité de
+    // la fiche (joignable, décideur identifié, checklist), pas seulement des devis.
+    const proExist = new Map((await fetchAll('prospects',
+      'id,societe,notes,date_relance,email,email_direct,telephone,contact_direct,checks_json'))
+      .map((p) => [normSociete(p.societe), p]));
     const prospectIdParKey = new Map();
     for (const e of soc) {
-      const sp = scorePotentiel(e, seuils, now);
+      // Le score POTENTIEL issu des devis sert de BASE ; l'avancement dans le
+      // pipeline et l'état de la fiche la modulent (±4). Règle identique à
+      // celle du CRM (lib/engagement.mjs ↔ section SCORE D'ENGAGEMENT de
+      // crm.html) : sans ça le score sauterait d'une valeur à l'autre entre
+      // une sauvegarde dans le CRM et la synchro de la nuit suivante.
+      const base = scorePotentiel(e, seuils, now);
+      const statut = statutCRM(e);
+      const ex = proExist.get(e.key);
+      const notes = remplacerBloc(ex ? ex.notes : '', noteAuto(e));
+
+      const fiche = {
+        statut, notes,
+        email: ex ? ex.email : ([...e.emails][0] || ''),
+        email_direct: ex ? ex.email_direct : null,
+        telephone: ex ? ex.telephone : ([...e.tels][0] || ''),
+        contact_direct: ex ? ex.contact_direct : null,
+        checks_json: ex ? ex.checks_json : null,
+      };
+      const r = scoreFinal(base, fiche);
+
       const commun = {
-        statut: statutCRM(e), score: sp,
-        score_detail: { potentiel: sp, enCours: e.aEncours, montantEncours: e.montantEncours },
+        statut, score: r.score,
+        score_detail: {
+          base, modificateur: r.modificateur, avancement: r.avancement, fiche: r.fiche,
+          raisons: r.raisons, calc: 'engagement-v1', maj: nowISO,
+          enCours: e.aEncours, montantEncours: e.montantEncours,
+        },
         date_relance: iso(e.prochainEvent),
       };
-      const ex = proExist.get(e.key);
+
       if (ex) {
-        const notes = remplacerBloc(ex.notes, noteAuto(e));
         const patch = { ...commun, notes };
         if (!commun.date_relance) patch.date_relance = ex.date_relance; // ne pas effacer une relance saisie
         const { error } = await sb.from('prospects').update(patch).eq('id', ex.id);
         if (!error) { res.prospects++; prospectIdParKey.set(e.key, ex.id); }
       } else {
         const { data, error } = await sb.from('prospects').insert({
-          societe: e.societe, contact: e.societe, email: [...e.emails][0] || '', telephone: [...e.tels][0] || '',
-          notes: remplacerBloc('', noteAuto(e)), ...commun,
+          societe: e.societe, contact: e.societe, email: fiche.email, telephone: fiche.telephone,
+          notes, ...commun,
         }).select('id').single();
         if (!error && data) { res.prospects++; prospectIdParKey.set(e.key, data.id); }
       }
