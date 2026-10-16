@@ -1230,8 +1230,9 @@ function drawGeoMap(pts,unit){
   loadLeaflet(()=>{
     const el=document.getElementById('geoMap'); if(!el)return;
     if(!GEO_MAP){
-      // canvas : ~1 600 bulles sans ralentir la TV ni le téléphone · zoom molette fluide par demi-niveaux
-      GEO_MAP=L.map(el,{scrollWheelZoom:true,preferCanvas:true,zoomSnap:.5,zoomDelta:.5,wheelPxPerZoomLevel:80,wheelDebounceTime:20}).setView(CAEN,8);
+      // canvas : ~1 600 bulles sans ralentir la TV ni le téléphone · zoom molette (niveaux entiers :
+      // tuiles nettes, pas d'artefact de redimensionnement), molette volontairement douce
+      GEO_MAP=L.map(el,{scrollWheelZoom:true,preferCanvas:true,wheelPxPerZoomLevel:100,wheelDebounceTime:30}).setView(CAEN,8);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(GEO_MAP);
       GEO_LAYER=L.layerGroup().addTo(GEO_MAP);
     }
@@ -1243,7 +1244,7 @@ function drawGeoMap(pts,unit){
     pts.slice().sort((a,b)=>b.n-a.n).forEach(p=>{
       const share=p.n/max, r=1.5+20*Math.sqrt(share);
       L.circleMarker([p.b.lat,p.b.lon],{radius:r,color:'#E8B14A',weight:share>.02?1:.4,fillColor:'#FFCC5C',fillOpacity:share>.02?.55:.35})
-        .bindTooltip('<b>'+esc(p.b.ville||'?')+'</b> '+esc(p.cp)+'<br>'+fmt(p.n)+' '+unit+(p.n>1?'s':'')+' · '+Math.round(p.n/tot*100)+' %'+(p.j?'<br>'+fmt(p.j)+' joueurs':''),{direction:'top'})
+        .bindTooltip('<b>'+esc(p.b.ville||'?')+'</b> '+esc(p.cp)+'<br>'+fmt(p.n)+' '+unit+(p.n>1?'s':'')+' · '+(p.n/tot*100<1?'< 1':Math.round(p.n/tot*100))+' %'+(p.j?'<br>'+fmt(p.j)+' joueurs':''),{direction:'top'})
         .addTo(GEO_LAYER);
     });
     // Cadrage initial : la Normandie élargie (les points très lointains ne dézooment pas la carte)
