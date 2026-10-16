@@ -241,7 +241,7 @@
   .codes-detail .code-row:last-child{border-bottom:none}
 
   /* ===== Répartition B2B / B2C ===== */
-  .b2b-tile{margin-top:14px;background:var(--bg-card);border:1px solid var(--line);border-radius:15px;padding:14px 16px}
+  .b2b-tile{background:var(--bg-card);border:1px solid var(--line);border-radius:15px;padding:14px 16px}
   .b2b-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
   .b2b-head .ct-name{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--soft);font-weight:800}
   .b2b-split{display:flex;height:22px;border-radius:11px;overflow:hidden;background:var(--bg-elev)}
@@ -258,7 +258,12 @@
   /* ===== Carte : d'où viennent nos joueurs ===== */
   .geo-wrap{display:grid;grid-template-columns:1.6fr 1fr;gap:14px}
   @media(max-width:900px){.geo-wrap{grid-template-columns:1fr}}
-  .geo-map{height:440px;border-radius:14px;overflow:hidden;background:var(--bg-card);border:1px solid var(--line);position:relative;z-index:1}
+  .geo-map-wrap{position:relative;min-width:0}
+  .geo-map{height:520px;border-radius:14px;overflow:hidden;background:var(--bg-card);border:1px solid var(--line);position:relative;z-index:1;cursor:grab}
+  .geo-map:active{cursor:grabbing}
+  .geo-reset{position:absolute;top:10px;right:10px;z-index:5;background:var(--bg-elev);border:1px solid var(--line-s);color:var(--soft);border-radius:9px;padding:7px 11px;font-family:'Manrope';font-size:12px;font-weight:800;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.4)}
+  .geo-reset:hover{border-color:var(--gold);color:var(--gold)}
+  .geo-hint{font-size:10.5px;color:var(--mute);margin-top:6px;text-align:center}
   .geo-map .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.72) contrast(.9) saturate(.5)}
   .geo-map .leaflet-control-attribution{background:rgba(15,20,25,.75);color:var(--mute);font-size:9px}
   .geo-map .leaflet-control-attribution a{color:var(--soft)}
@@ -278,7 +283,7 @@
   .top-row:last-child{border-bottom:none}
   .top-row .t-cp{color:var(--mute);font-family:'JetBrains Mono';font-size:11px;margin-left:6px}
   .top-row .t-n{font-family:'JetBrains Mono';font-weight:700;color:var(--soft);white-space:nowrap}
-  @media(max-width:640px){.geo-map{height:300px}.geo-zones,.geo-top{padding:11px 12px}.b2b-legend b{font-size:22px}.hb-pill{font-size:9.5px;padding:2px 7px;margin-left:4px}}
+  @media(max-width:640px){.geo-map{height:320px}.geo-zones,.geo-top{padding:11px 12px}.b2b-legend b{font-size:22px}.hb-pill{font-size:9.5px;padding:2px 7px;margin-left:4px}.geo-hint{display:none}.geo-reset{font-size:11px;padding:6px 9px}}
 
   /* ===== Sections repliables (détail, analyse, journal) ===== */
   details.fold{background:var(--bg-panel);border:1px solid var(--line);border-radius:16px;padding:2px 20px;margin-bottom:14px}
@@ -326,7 +331,8 @@
     .cmp-tabs{flex-wrap:nowrap;gap:4px;margin-bottom:8px;margin-top:8px}
     .cmp-tabs .cmp-tab{flex:1 1 0;min-width:0;padding:10px 3px;font-size:11.5px;border-radius:9px;text-align:center;letter-spacing:-.02em}
     .cmp-tabs .cmp-nav{flex:0 0 auto;padding:10px 8px;font-size:15px}
-    #vcTabs .cmp-tab{font-size:10.5px;padding:9px 2px}
+    #vcTabs .cmp-tab,#b2bTabs .cmp-tab{font-size:10.5px;padding:9px 2px}
+    #b2bCard .card-sub{display:none}
     .cmp-period{font-size:10.5px;margin-bottom:9px}
     .cmp-grid{grid-template-columns:repeat(2,1fr);gap:8px}
     .cmp-tile{padding:10px 10px;border-radius:12px}
@@ -475,6 +481,20 @@
     </div>
     <div class="cmp-period" id="cmpPeriod">—</div>
     <div class="cmp-grid" id="cmpGrid"></div>
+  </div>
+
+  <div class="card" id="b2bCard">
+    <h2>🏢 Répartition B2B / B2C · <span id="b2bTabName" style="color:var(--gold)">du mois</span></h2>
+    <div class="card-sub">Part des entreprises et CSE dans le chiffre d'affaires — choisis ta période</div>
+    <div class="cmp-tabs" id="b2bTabs">
+      <button class="cmp-tab" data-tab="jour" onclick="setB2BTab(this)">Jour</button>
+      <button class="cmp-tab" data-tab="semaine" onclick="setB2BTab(this)">Semaine</button>
+      <button class="cmp-tab active" data-tab="mois" onclick="setB2BTab(this)">Mois</button>
+      <button class="cmp-tab" data-tab="trimestre" onclick="setB2BTab(this)">Trimestre</button>
+      <button class="cmp-tab" data-tab="annee" onclick="setB2BTab(this)">Année</button>
+      <button class="cmp-tab" data-tab="tout" onclick="setB2BTab(this)">Tout</button>
+    </div>
+    <div class="cmp-period" id="b2bPeriod">—</div>
     <div id="b2bTile"></div>
   </div>
 
@@ -508,7 +528,11 @@
     <div class="card-sub" id="geoSub">Codes postaux des clients 4escape</div>
     <div class="cmp-tabs" id="geoTabs"></div>
     <div class="geo-wrap" style="display:none">
-      <div id="geoMap" class="geo-map"></div>
+      <div class="geo-map-wrap">
+        <div id="geoMap" class="geo-map"></div>
+        <button class="geo-reset" onclick="geoReset()" title="Revenir à la vue d'ensemble">⟲ Recentrer</button>
+        <div class="geo-hint">Molette pour zoomer · cliquer-glisser pour déplacer · survoler une bulle pour le détail</div>
+      </div>
       <div class="geo-side">
         <div class="geo-zones" id="geoZones"></div>
         <div class="geo-top" id="geoTop"></div>
@@ -1003,26 +1027,37 @@ function renderCompare(){
       '<div class="ct-foot"><span class="ct-obj'+(done?' done':'')+'">'+objTxt+'</span><span class="ct-n1">N‑1 '+(hasPrev?m.f(m.prev):'—')+'</span></div>'+
       '</div>';
   }).join('');
-  renderB2B(cur,prev);
 }
 
-/* ---- Répartition B2B / B2C sur la période affichée ----
+/* ---- Répartition B2B / B2C — période indépendante (Jour … Année, Tout) ----
    B2B = commande passée au nom d'une société dans 4escape (montants TTC
    facturés, detail.vendu.b2b écrit par le robot). ---- */
-function renderB2B(cur,prev){
+let B2B_TAB='mois';
+const B2B_NAMES={jour:'du jour',semaine:'de la semaine',mois:'du mois',trimestre:'du trimestre',annee:'de l\'année',tout:'depuis le début'};
+function setB2BTab(btn){B2B_TAB=btn.dataset.tab;[...document.querySelectorAll('#b2bTabs .cmp-tab')].forEach(b=>b.classList.toggle('active',b===btn));renderB2B();}
+function renderB2B(){
   const el=document.getElementById('b2bTile'); if(!el)return;
-  const b=cur.b2b, p=prev.b2b, tot=b.ca+b.caB2C, ptot=p.ca+p.caB2C;
+  const nar=(typeof window!=='undefined'&&window.matchMedia)?window.matchMedia('(max-width:640px)').matches:false;
+  const bt=document.querySelector('#b2bTabs .cmp-tab[data-tab="trimestre"]'); if(bt){const want=nar?'Trim.':'Trimestre'; if(bt.textContent!==want)bt.textContent=want;}
+  const tn=document.getElementById('b2bTabName'); if(tn)tn.textContent=B2B_NAMES[B2B_TAB]||'';
+  const allDates=state.entries.filter(e=>e.date).map(e=>e.date).sort();
+  if(!allDates.length){el.innerHTML='';return;}
+  let cur,prev=null,label,prevLabel='';
+  if(B2B_TAB==='tout'){cur=periodAgg(allDates[0],allDates[allDates.length-1]);label='Depuis le début · '+allDates[0].slice(0,4)+' → '+allDates[allDates.length-1].slice(0,4);}
+  else{const P=computePeriods(ymdToDate(allDates[allDates.length-1]),B2B_TAB,false);cur=periodAgg(P.curStart,P.curEnd);prev=periodAgg(P.prevStart,P.prevEnd);label=P.label;prevLabel=P.prevLabel;}
+  const per=document.getElementById('b2bPeriod'); if(per)per.innerHTML='📅 <b>'+esc(label)+'</b>'+(prevLabel?' &nbsp;·&nbsp; '+esc(prevLabel):'');
+  const b=cur.b2b, tot=b.ca+b.caB2C;
   if(!b.days||tot<=0){
-    el.innerHTML='<div class="b2b-tile"><div class="b2b-head"><span class="ct-name">🏢 Répartition B2B / B2C</span></div>'+
-      '<div class="b2b-note">Pas encore de donnée B2B sur cette période. Le robot l\'enregistre chaque nuit depuis le 16/10/2026 ; pour les périodes passées, lance l\'enrichissement de l\'historique (GitHub → Actions → « Synchro 4escape → Gamedoor » → enrich).</div></div>';
+    el.innerHTML='<div class="b2b-tile"><div class="b2b-note">Pas encore de donnée B2B sur cette période. Le robot l\'enregistre chaque nuit ; pour une période passée manquante, lance l\'enrichissement de l\'historique (GitHub → Actions → « Synchro 4escape → Gamedoor » → enrich).</div></div>';
     return;}
+  const p=prev?prev.b2b:null, ptot=p?p.ca+p.caB2C:0;
   const pct=Math.round(b.ca/tot*100), pctC=100-pct;
   const ppct=ptot>0?Math.round(p.ca/ptot*100):null;
   const dp=ppct==null?0:pct-ppct;
-  const delta=ppct==null?'<span class="ct-delta flat">N‑1 —</span>':'<span class="ct-delta '+(dp>0?'up':dp<0?'down':'flat')+'">'+(dp>0?'▲':dp<0?'▼':'▬')+' '+(dp>0?'+':'')+dp+' pt vs N‑1</span>';
+  const delta=!prev?'':(ppct==null?'<span class="ct-delta flat">N‑1 —</span>':'<span class="ct-delta '+(dp>0?'up':dp<0?'down':'flat')+'">'+(dp>0?'▲':dp<0?'▼':'▬')+' '+(dp>0?'+':'')+dp+' pt vs N‑1</span>');
   const partiel=b.days<cur.days?' · sur '+b.days+'/'+cur.days+' jours renseignés':'';
   el.innerHTML='<div class="b2b-tile">'+
-    '<div class="b2b-head"><span class="ct-name">🏢 Répartition B2B / B2C · '+(TAB_NAMES[CMP_TAB]||'')+'</span>'+delta+'</div>'+
+    '<div class="b2b-head"><span class="ct-name">'+fmt(tot)+' € facturés · '+fmt(b.n+b.nB2C)+' commandes</span>'+delta+'</div>'+
     '<div class="b2b-split"><div class="b2b" style="width:'+pct+'%"></div><div class="b2c" style="width:'+pctC+'%"></div></div>'+
     '<div class="b2b-legend">'+
       '<div class="l-b2b"><b>'+pct+' %</b>B2B · entreprises, CSE<small>'+fmt(b.ca)+' € · '+b.n+' commande'+(b.n>1?'s':'')+(ppct!=null?' · N‑1 : '+ppct+' %':'')+'</small></div>'+
@@ -1195,7 +1230,8 @@ function drawGeoMap(pts,unit){
   loadLeaflet(()=>{
     const el=document.getElementById('geoMap'); if(!el)return;
     if(!GEO_MAP){
-      GEO_MAP=L.map(el,{scrollWheelZoom:false,preferCanvas:true}).setView(CAEN,8);   // canvas : ~1 600 bulles sans ralentir la TV ni le téléphone
+      // canvas : ~1 600 bulles sans ralentir la TV ni le téléphone · zoom molette fluide par demi-niveaux
+      GEO_MAP=L.map(el,{scrollWheelZoom:true,preferCanvas:true,zoomSnap:.5,zoomDelta:.5,wheelPxPerZoomLevel:80,wheelDebounceTime:20}).setView(CAEN,8);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(GEO_MAP);
       GEO_LAYER=L.layerGroup().addTo(GEO_MAP);
     }
@@ -1211,12 +1247,14 @@ function drawGeoMap(pts,unit){
         .addTo(GEO_LAYER);
     });
     // Cadrage initial : la Normandie élargie (les points très lointains ne dézooment pas la carte)
-    if(!GEO_MAP._fitDone){GEO_MAP._fitDone=true;
-      const near=pts.filter(p=>distKm(p.b.lat,p.b.lon)<250).map(p=>[p.b.lat,p.b.lon]);
-      if(near.length)GEO_MAP.fitBounds(L.latLngBounds(near),{padding:[20,20],maxZoom:10});}
+    const near=pts.filter(p=>distKm(p.b.lat,p.b.lon)<250).map(p=>[p.b.lat,p.b.lon]);
+    if(near.length)GEO_BOUNDS=L.latLngBounds(near);
+    if(!GEO_MAP._fitDone){GEO_MAP._fitDone=true;geoReset();}
     setTimeout(()=>GEO_MAP.invalidateSize(),60);
   });
 }
+let GEO_BOUNDS=null;
+function geoReset(){if(GEO_MAP&&GEO_BOUNDS)GEO_MAP.fitBounds(GEO_BOUNDS,{padding:[20,20],maxZoom:10});else if(GEO_MAP)GEO_MAP.setView(CAEN,8);}
 
 /* ---- Backrooms : résumé dans les réglages (ce qui est retiré, et l'effet sur les objectifs) ---- */
 function renderBrInfo(){
@@ -1350,6 +1388,7 @@ function render(){
     else rFlag.style.display='none'; }
 
   renderVentes();
+  renderB2B();
   renderGeo();
   renderBrInfo();
 
