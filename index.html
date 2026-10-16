@@ -1154,7 +1154,7 @@ function renderGeo(){
   const hasCmd=!!(O.totaux&&O.totaux.commandes>0);
   if(GEO_MEASURE===null)GEO_MEASURE=(hasCmd&&O.totaux.commandes>=(O.totaux.clients||0))?'commandes':'clients';
   const useCmd=hasCmd&&GEO_MEASURE==='commandes';
-  const years=(O.annees||[]).filter(y=>+y>=2022).slice().sort().reverse();
+  const years=(O.annees||[]).filter(y=>+y>=2022&&+y<=new Date().getFullYear()).slice().sort().reverse();   // pas d'onglet pour les réservations futures
   const want=useCmd?['tout'].concat(years):['tout'];
   const sig=GEO_MEASURE+'|'+want.join(',');
   if(tabs.dataset.sig!==sig){tabs.dataset.sig=sig;
@@ -1195,16 +1195,18 @@ function drawGeoMap(pts,unit){
   loadLeaflet(()=>{
     const el=document.getElementById('geoMap'); if(!el)return;
     if(!GEO_MAP){
-      GEO_MAP=L.map(el,{scrollWheelZoom:false}).setView(CAEN,8);
+      GEO_MAP=L.map(el,{scrollWheelZoom:false,preferCanvas:true}).setView(CAEN,8);   // canvas : ~1 600 bulles sans ralentir la TV ni le téléphone
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(GEO_MAP);
       GEO_LAYER=L.layerGroup().addTo(GEO_MAP);
     }
     GEO_LAYER.clearLayers();
     if(!pts.length)return;
     const max=Math.max(...pts.map(p=>p.n)), tot=pts.reduce((a,p)=>a+p.n,0);
+    // Rayon en racine carrée du poids : les ~1 600 petits codes postaux restent discrets,
+    // les vraies concentrations (Caen, agglo) ressortent.
     pts.slice().sort((a,b)=>b.n-a.n).forEach(p=>{
-      const r=5+16*Math.sqrt(p.n/max);
-      L.circleMarker([p.b.lat,p.b.lon],{radius:r,color:'#E8B14A',weight:1,fillColor:'#FFCC5C',fillOpacity:.55})
+      const share=p.n/max, r=1.5+20*Math.sqrt(share);
+      L.circleMarker([p.b.lat,p.b.lon],{radius:r,color:'#E8B14A',weight:share>.02?1:.4,fillColor:'#FFCC5C',fillOpacity:share>.02?.55:.35})
         .bindTooltip('<b>'+esc(p.b.ville||'?')+'</b> '+esc(p.cp)+'<br>'+fmt(p.n)+' '+unit+(p.n>1?'s':'')+' · '+Math.round(p.n/tot*100)+' %'+(p.j?'<br>'+fmt(p.j)+' joueurs':''),{direction:'top'})
         .addTo(GEO_LAYER);
     });

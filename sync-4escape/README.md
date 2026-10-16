@@ -76,11 +76,12 @@ nominative n'est écrite** : des comptages par code postal uniquement. Si l'expo
 clients n'a pas de colonne code postal, le run échoue en listant les colonnes vues ;
 régler alors les secrets `CUSTOMERS_PATH` / `CUSTOMERS_EXPORT_TYPE`.
 
-Premier relevé du 16/10/2026 : **198 codes postaux**, mais seulement **741 clients
-sur 25 425** ont un code postal dans 4escape (l'adresse n'est saisie que pour les
-clients facturés, surtout les entreprises) et 332 commandes rattachées. La carte est
-donc indicative ; pour l'enrichir, demander le code postal à la réservation dans le
-paramétrage 4escape. Rafraîchi le 1er de chaque mois.
+L'export Clients porte deux adresses : « User Address … » (le particulier) et
+« Company Address … » (la société) ; le robot prend, par client, la première
+renseignée, particulier d'abord. Relevé du 16/10/2026 : **17 932 clients sur 25 426**
+avec un code postal (70 %), **1 647 codes postaux**, 17 781 commandes rattachées —
+Caen & agglo 48 %, reste du Calvados 20 %, reste de la Normandie 15 %, Île-de-France
+7 %, reste de la France 9 %, étranger 1 %. Rafraîchi le 1er de chaque mois.
 
 ### Backrooms — salle masquée, retrouvée par l'export Commandes (`backrooms.mjs`)
 La salle **« PERDUS DANS LES BACKROOMS »** est masquée dans l'onglet Rooms de 4escape.
