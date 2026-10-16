@@ -2,10 +2,12 @@ name: Origines des joueurs (codes postaux) -> Gamedoor
 
 # Export CLIENTS (+ COMMANDES si possible) de 4escape -> comptages par code
 # postal geocodes -> state/autoMeta/analyse/origines (carte du dashboard).
-# Voir sync-4escape/origines.mjs. Lancement manuel ; une fois valide, un cron
-# mensuel pourra etre ajoute ici.
+# Voir sync-4escape/origines.mjs. Valide le 16/10/2026 (198 codes postaux) :
+# rafraichi chaque mois, lancement manuel possible a tout moment.
 
 on:
+  schedule:
+    - cron: '40 3 1 * *'         # le 1er du mois, ~05:40 Paris (ete) / 04:40 (hiver)
   workflow_dispatch:
     inputs:
       dry_run:

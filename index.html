@@ -783,10 +783,14 @@ function sum(arr,f){return arr.reduce((a,e)=>a+(f(e)||0),0);}
    (chaque nuit, et par le mode --enrich pour l'historique). */
 function brOf(e){return (e&&e.detail&&e.detail.backrooms)||null;}
 function hb(){return state.config.horsBackrooms!==false;}
-function caOf(e){const b=hb()?brOf(e):null;return (e.ca||0)-(b?(b.ca||0):0);}
+/* Seules des VENTES Backrooms (CA net positif) sont retirées : un jour où seul un
+   code de prévente BRVIP a été utilisé en paiement (CA net négatif) reste tel quel,
+   le code étant déjà déduit du CA comme n'importe quelle remise. */
+function brCa(b){return Math.max(0,(b&&b.ca)||0);}
+function caOf(e){const b=hb()?brOf(e):null;return (e.ca||0)-brCa(b);}
 function sessOf(e){const b=hb()?brOf(e):null;return (e.sessions||0)-(b?(b.sessions||0):0);}
 function jouOf(e){const b=hb()?brOf(e):null;return (e.players||0)-(b?(b.joueurs||0):0);}
-function brSum(es){let ca=0,s=0,j=0,n=0;for(const e of es){const b=brOf(e);if(b&&(b.ca||b.sessions)){ca+=b.ca||0;s+=b.sessions||0;j+=b.joueurs||0;n++;}}return {ca,sessions:s,joueurs:j,days:n};}
+function brSum(es){let ca=0,s=0,j=0,n=0;for(const e of es){const b=brOf(e);if(b&&(brCa(b)>0||b.sessions)){ca+=brCa(b);s+=b.sessions||0;j+=b.joueurs||0;n++;}}return {ca,sessions:s,joueurs:j,days:n};}
 /* Part B2B : montants TTC facturés aux commandes passées au nom d'une société (detail.vendu.b2b) */
 function b2bSum(es){let ca=0,caB2C=0,n=0,nB2C=0,days=0;for(const e of es){const b=e.detail&&e.detail.vendu&&e.detail.vendu.b2b;if(!b)continue;days++;ca+=b.ca||0;caB2C+=b.caB2C||0;n+=b.n||0;nB2C+=b.nB2C||0;}return {ca,caB2C,n,nB2C,days};}
 function avatarOf(name){const r=state.roster.find(x=>x.name===name);return r?r.avatar:'🎮';}
@@ -1120,7 +1124,7 @@ if(typeof window!=='undefined')window.__computePeriods=computePeriods;
    Leaflet + tuiles OpenStreetMap chargés à la demande, seulement s'il y a
    des données (la page reste légère sur la TV de la salle de pause).
    ============================================================ */
-let GEO_TAB='tout', GEO_MAP=null, GEO_LAYER=null, LEAFLET_STATE=null;
+let GEO_TAB='tout', GEO_MEASURE=null, GEO_MAP=null, GEO_LAYER=null, LEAFLET_STATE=null;   // GEO_MEASURE : 'clients' | 'commandes'
 const CAEN=[49.1829,-0.3707];
 const IDF=new Set(['75','77','78','91','92','93','94','95']), NORMANDIE=new Set(['14','27','50','61','76']);
 const ZONES=['Caen & agglo (< 15 km)','Reste du Calvados','Reste de la Normandie','Île-de-France','Reste de la France','Étranger'];
@@ -1134,30 +1138,40 @@ function zoneOf(b){
   if(IDF.has(b.dep))return ZONES[3];
   return ZONES[4];
 }
-function setGeoTab(btn){GEO_TAB=btn.dataset.tab;[...document.querySelectorAll('#geoTabs .cmp-tab')].forEach(b=>b.classList.toggle('active',b===btn));renderGeo();}
+function setGeoTab(btn){GEO_TAB=btn.dataset.tab;[...document.querySelectorAll('#geoTabs .cmp-tab[data-tab]')].forEach(b=>b.classList.toggle('active',b===btn));renderGeo();}
+function setGeoMeasure(btn){GEO_MEASURE=btn.dataset.measure;GEO_TAB='tout';renderGeo();}
 function renderGeo(){
   const card=document.getElementById('geoCard'); if(!card)return;
   const empty=document.getElementById('geoEmpty'),wrap=card.querySelector('.geo-wrap'),tabs=document.getElementById('geoTabs'),sub=document.getElementById('geoSub');
   const O=state.analyse&&state.analyse.origines;
   if(!O||!O.parCP||!Object.keys(O.parCP).length){empty.style.display='block';wrap.style.display='none';tabs.innerHTML='';sub.textContent='Codes postaux des clients 4escape';return;}
   empty.style.display='none';wrap.style.display='grid';
-  const hasCmd=!!(O.totaux&&O.totaux.commandes>0);          // commandes rattachées ? sinon on compte les clients
+  // Deux mesures : CLIENTS connus avec un code postal (base la plus large) ou COMMANDES
+  // rattachées (permet les onglets par année, mais 4escape n'a l'adresse que des clients facturés).
+  const hasCmd=!!(O.totaux&&O.totaux.commandes>0);
+  if(GEO_MEASURE===null)GEO_MEASURE=(hasCmd&&O.totaux.commandes>=(O.totaux.clients||0))?'commandes':'clients';
+  const useCmd=hasCmd&&GEO_MEASURE==='commandes';
   const years=(O.annees||[]).filter(y=>+y>=2022).slice().sort().reverse();
-  const want=['tout'].concat(hasCmd?years:[]);
-  if(tabs.dataset.sig!==want.join(',')){tabs.dataset.sig=want.join(',');
-    tabs.innerHTML=want.map(t=>'<button class="cmp-tab'+(t===GEO_TAB?' active':'')+'" data-tab="'+t+'" onclick="setGeoTab(this)">'+(t==='tout'?'Tout':t)+'</button>').join('');}
+  const want=useCmd?['tout'].concat(years):['tout'];
+  const sig=GEO_MEASURE+'|'+want.join(',');
+  if(tabs.dataset.sig!==sig){tabs.dataset.sig=sig;
+    tabs.innerHTML=(hasCmd?'<button class="cmp-tab'+(GEO_MEASURE==='clients'?' active':'')+'" data-measure="clients" onclick="setGeoMeasure(this)">👤 Clients</button>'+
+      '<button class="cmp-tab'+(GEO_MEASURE==='commandes'?' active':'')+'" data-measure="commandes" onclick="setGeoMeasure(this)">🧾 Commandes</button>':'')+
+      (useCmd?want.map((t,i)=>'<button class="cmp-tab'+(t===GEO_TAB?' active':'')+'" data-tab="'+t+'" onclick="setGeoTab(this)"'+(i===0?' style="margin-left:12px"':'')+'>'+(t==='tout'?'Tout':t)+'</button>').join(''):'');}
   if(!want.includes(GEO_TAB))GEO_TAB='tout';
   const pts=[]; let tot=0,totJ=0;
   for(const cp of Object.keys(O.parCP)){const b=O.parCP[cp]; let n,j;
-    if(GEO_TAB==='tout'){n=hasCmd?(b.commandes||0):(b.clients||0);j=b.joueurs||0;}
+    if(!useCmd){n=b.clients||0;j=0;}
+    else if(GEO_TAB==='tout'){n=b.commandes||0;j=b.joueurs||0;}
     else{const a=(b.parAnnee||{})[GEO_TAB];n=a?a[0]:0;j=a?a[1]:0;}
     if(n>0&&b.lat!=null){pts.push({cp,n,j,b});tot+=n;totJ+=j;}}
-  const unit=hasCmd?'commande':'client';
+  const unit=useCmd?'commande':'client';
   const maj=O.majLe?new Date(O.majLe).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}):'';
   const zones={}; for(const p of pts){const z=zoneOf(p.b);zones[z]=(zones[z]||0)+p.n;}
-  if(GEO_TAB==='tout'&&O.etranger){const etr=Object.values(O.etranger).reduce((a,x)=>a+(hasCmd?(x.commandes||0):(x.clients||0)),0);
+  if(GEO_TAB==='tout'&&O.etranger){const etr=Object.values(O.etranger).reduce((a,x)=>a+(useCmd?(x.commandes||0):(x.clients||0)),0);
     if(etr>0){zones[ZONES[5]]=(zones[ZONES[5]]||0)+etr;tot+=etr;}}
-  sub.textContent=fmt(tot)+' '+unit+(tot>1?'s':'')+(hasCmd&&totJ?' · '+fmt(totJ)+' joueurs':'')+' · '+pts.length+' codes postaux'+(maj?' · relevé du '+maj:'');
+  const couverture=(!useCmd&&O.source&&O.source.clients)?' sur '+fmt(O.source.clients)+' clients 4escape':'';
+  sub.textContent=fmt(tot)+' '+unit+(tot>1?'s':'')+(useCmd&&totJ?' · '+fmt(totJ)+' joueurs':'')+couverture+' · '+pts.length+' codes postaux'+(maj?' · relevé du '+maj:'');
   document.getElementById('geoZones').innerHTML='<h3>Répartition</h3>'+ZONES.filter(z=>zones[z]).map(z=>{const pct=tot?Math.round(zones[z]/tot*100):0;
     return '<div class="zone-row"><span>'+z+'<span class="z-n">'+fmt(zones[z])+'</span></span><span class="z-pct">'+pct+' %</span><div class="z-bar"><div style="width:'+pct+'%"></div></div></div>';}).join('');
   const top=pts.slice().sort((a,b)=>b.n-a.n).slice(0,10);
@@ -1204,10 +1218,14 @@ function renderBrInfo(){
   const el=document.getElementById('brInfo'); if(!el)return;
   const enriched=state.entries.filter(e=>e.detail&&e.detail.backrooms).length;
   if(!enriched){el.innerHTML='Aucune journée ne porte encore le détail Backrooms. Lance l\'enrichissement de l\'historique (GitHub → Actions → « Synchro 4escape → Gamedoor » → Run workflow → <b>enrich = 2025-01-01:2025-12-31</b>, puis la même chose pour 2026) : les comparaisons N-1 et les objectifs retireront alors leur chiffre d\'affaires.';return;}
-  const byYear={}; let days=0;
-  for(const e of state.entries){const b=brOf(e);if(b&&(b.ca||b.sessions)){const y=e.date.slice(0,4);const o=byYear[y]=byYear[y]||{ca:0,s:0,j:0,first:e.date,last:e.date};o.ca+=b.ca||0;o.s+=b.sessions||0;o.j+=b.joueurs||0;if(e.date<o.first)o.first=e.date;if(e.date>o.last)o.last=e.date;days++;}}
+  const byYear={}; let days=0, vouchers=0, vouchersEur=0;
+  for(const e of state.entries){const b=brOf(e);if(!b)continue;
+    if((b.remises||0)>0){vouchers+=(b.labels||[]).filter(l=>/BRVIP|prevente/i.test(l)).length||1;vouchersEur+=b.remises;}
+    if(brCa(b)>0||b.sessions){const y=e.date.slice(0,4);const o=byYear[y]=byYear[y]||{ca:0,s:0,j:0,first:e.date,last:e.date};o.ca+=brCa(b);o.s+=b.sessions||0;o.j+=b.joueurs||0;if(e.date<o.first)o.first=e.date;if(e.date>o.last)o.last=e.date;days++;}}
   const ys=Object.keys(byYear).sort();
-  if(!ys.length){el.innerHTML=enriched+' journées analysées — aucune vente Backrooms repérée.';return;}
+  if(!ys.length){el.innerHTML=enriched+' journées analysées — <b>aucune vente Backrooms repérée</b> dans le journal 4escape (salles, produits, catégories)'+
+    (vouchers?' ; seulement '+vouchers+' code(s) de prévente « BRVIP » ('+fmt(vouchersEur)+' €) utilisés en paiement de parties classiques, déjà déduits du CA comme des remises':'')+
+    '. Si les Backrooms étaient vendues sous un autre libellé ou dans un autre compte, indique-le pour ajuster la détection.';return;}
   const jour=(ds)=>new Date(ds+'T00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
   const lignes=ys.map(y=>{const o=byYear[y];const es=state.entries.filter(x=>x.date.startsWith(y));const brut=sum(es,x=>x.ca||0);const mois=new Set(es.map(x=>x.date.slice(0,7))).size||1;
     return '<b>'+y+'</b> ('+jour(o.first)+' → '+jour(o.last)+') : '+fmt(o.ca)+' € · '+o.s+' sessions · '+o.j+' joueurs — CA '+y+' : '+fmt(brut)+' € brut → <b>'+fmt(brut-o.ca)+' € hors Backrooms</b> ('+fmt((brut-o.ca)/mois)+' €/mois en moyenne sur '+mois+' mois)';}).join('<br>');

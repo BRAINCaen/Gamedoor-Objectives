@@ -74,9 +74,19 @@ année, géocode chaque code postal via `geo.api.gouv.fr` (gratuit, cache dans
 `autoMeta/analyse/geo`) et écrit `state/autoMeta/analyse/origines`. **Aucune donnée
 nominative n'est écrite** : des comptages par code postal uniquement. Si l'export
 clients n'a pas de colonne code postal, le run échoue en listant les colonnes vues ;
-régler alors les secrets `CUSTOMERS_PATH` / `CUSTOMERS_EXPORT_TYPE`. Le robot
-`explore.mjs` (workflow « Inventaire 4escape ») liste écrans, boutons et colonnes
-d'export sans rien télécharger de nominatif, pour trouver le bon écran.
+régler alors les secrets `CUSTOMERS_PATH` / `CUSTOMERS_EXPORT_TYPE`.
+
+Premier relevé du 16/10/2026 : **198 codes postaux**, mais seulement **741 clients
+sur 25 425** ont un code postal dans 4escape (l'adresse n'est saisie que pour les
+clients facturés, surtout les entreprises) et 332 commandes rattachées. La carte est
+donc indicative ; pour l'enrichir, demander le code postal à la réservation dans le
+paramétrage 4escape. Rafraîchi le 1er de chaque mois.
+
+Premier enrichissement de l'historique (16/10/2026, 2020 → 2026) : **aucune vente
+Backrooms** n'apparaît dans le journal 4escape (mêmes quatre salles en 2025 et 2026) ;
+seuls 13 codes de prévente « BRVIP - Prevente Backroom » de 300 € ont été utilisés en
+paiement de parties classiques en oct.-nov. 2025. Le dashboard ne retire donc rien
+tant qu'un libellé de vente Backrooms n'est pas identifié (élargir `RE_BACKROOMS`).
 
 > Ces agrégats vivent sous `state/autoMeta/analyse` parce que les règles Firebase
 > actuelles n'autorisent aucune autre branche sous `/state` sans republication des
