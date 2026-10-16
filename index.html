@@ -786,7 +786,7 @@ function hb(){return state.config.horsBackrooms!==false;}
 /* Seules des VENTES Backrooms (CA net positif) sont retirées : un jour où seul un
    code de prévente BRVIP a été utilisé en paiement (CA net négatif) reste tel quel,
    le code étant déjà déduit du CA comme n'importe quelle remise. */
-function brCa(b){return Math.max(0,(b&&b.ca)||0);}
+function brCa(b){if(!b||!((b.brut||0)>0))return 0;return Math.max(0,b.ca||0);}   // brut = ventes Backrooms réelles (hors codes)
 function caOf(e){const b=hb()?brOf(e):null;return (e.ca||0)-brCa(b);}
 function sessOf(e){const b=hb()?brOf(e):null;return (e.sessions||0)-(b?(b.sessions||0):0);}
 function jouOf(e){const b=hb()?brOf(e):null;return (e.players||0)-(b?(b.joueurs||0):0);}
