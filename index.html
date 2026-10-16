@@ -818,8 +818,11 @@ function caOf(e){const b=hb()?brOf(e):null;return (e.ca||0)-brCa(b);}
 function sessOf(e){const b=hb()?brOf(e):null;return (e.sessions||0)-(brIn(b)?(b.sessions||0):0);}
 function jouOf(e){const b=hb()?brOf(e):null;return (e.players||0)-(brIn(b)?(b.joueurs||0):0);}
 function brSum(es){let ca=0,s=0,j=0,n=0;for(const e of es){const b=brOf(e);if(b&&brIn(b)&&(brCa(b)>0||b.sessions)){ca+=brCa(b);s+=b.sessions||0;j+=b.joueurs||0;n++;}}return {ca,sessions:s,joueurs:j,days:n};}
-/* Part B2B : montants TTC facturés aux commandes passées au nom d'une société (detail.vendu.b2b) */
-function b2bSum(es){let ca=0,caB2C=0,n=0,nB2C=0,days=0;for(const e of es){const b=e.detail&&e.detail.vendu&&e.detail.vendu.b2b;if(!b)continue;days++;ca+=b.ca||0;caB2C+=b.caB2C||0;n+=b.n||0;nB2C+=b.nB2C||0;}return {ca,caB2C,n,nB2C,days};}
+/* Part B2B : montants TTC facturés aux commandes passées au nom d'une société, comptés
+   À LA DATE DE L'ÉVÈNEMENT (detail.joue.b2b — journal « date de prestation »), jamais à la
+   date d'encaissement ni de création du devis. */
+function b2bOf(e){const b=e.detail&&e.detail.joue&&e.detail.joue.b2b;return (b&&b.ca!=null)?b:null;}
+function b2bSum(es){let ca=0,caB2C=0,n=0,nB2C=0,days=0;for(const e of es){const b=b2bOf(e);if(!b)continue;days++;ca+=b.ca||0;caB2C+=b.caB2C||0;n+=b.n||0;nB2C+=b.nB2C||0;}return {ca,caB2C,n,nB2C,days};}
 function avatarOf(name){const r=state.roster.find(x=>x.name===name);return r?r.avatar:'🎮';}
 /* ---- Objectifs effectifs du mois en cours ----
    Si autoOn : paliers = CA réf × (1 + croissance) × part du mois (saisonnalité).
@@ -1063,7 +1066,7 @@ function renderB2B(){
       '<div class="l-b2b"><b>'+pct+' %</b>B2B · entreprises, CSE<small>'+fmt(b.ca)+' € · '+b.n+' commande'+(b.n>1?'s':'')+(ppct!=null?' · N‑1 : '+ppct+' %':'')+'</small></div>'+
       '<div class="l-b2c"><b>'+pctC+' %</b>B2C · particuliers<small>'+fmt(b.caB2C)+' € · '+b.nB2C+' commande'+(b.nB2C>1?'s':'')+(ppct!=null?' · N‑1 : '+(100-ppct)+' %':'')+'</small></div>'+
     '</div>'+
-    '<div class="b2b-note">B2B = commande passée au nom d\'une société dans 4escape (montants TTC facturés)'+partiel+'</div></div>';
+    '<div class="b2b-note">B2B = commande passée au nom d\'une société dans 4escape · montants TTC facturés, comptés à la date de l\'évènement (jamais à l\'encaissement ni au devis)'+partiel+'</div></div>';
 }
 function toggleCodes(){const d=document.getElementById('codesDetail'),t=document.getElementById('codesTog');if(!d)return;const open=d.style.display==='none';d.style.display=open?'block':'none';if(t)t.textContent=open?'－':'＋';}
 
@@ -1366,7 +1369,7 @@ function render(){
       remisesBlock+
       line('🎮 Sessions jouées',(j.sessions||0)+' · '+(j.joueurs||0)+' joueurs')+
       (j.rooms&&j.rooms.length?line('🚪 Par salle (jouées)',esc(j.rooms.map(r=>r[0]+' · '+r[2]+' sess · '+fmt(r[1])+' €').join('  |  '))):'')+
-      (v.b2b?line('🏢 B2B · B2C (facturé)',fmt(v.b2b.ca)+' € ('+(v.b2b.n||0)+') · '+fmt(v.b2b.caB2C)+' € ('+(v.b2b.nB2C||0)+')'):'')+
+      (j.b2b&&j.b2b.ca!=null?line('🏢 B2B · B2C (date de l\'évènement)',fmt(j.b2b.ca)+' € ('+(j.b2b.n||0)+') · '+fmt(j.b2b.caB2C)+' € ('+(j.b2b.nB2C||0)+')'):'')+
       (d.backrooms&&(d.backrooms.ca||d.backrooms.sessions)?line('🕳️ Backrooms',fmt(d.backrooms.ca)+' € nets · '+(d.backrooms.sessions||0)+' sess'):'')+
       line('⭐ Avis Google',(d.avisGoogle?('total '+d.avisGoogle.totalAvis+' · note '+(d.avisGoogle.note||'—')+' · +'+(d.avisGoogle.nouveaux||0)+' ce jour'):'—'));}
 
@@ -1464,7 +1467,7 @@ function resetMonth(){if(!confirm('Nouveau mois : effacer les saisies du mois en
    SECURITE-FIREBASE.md. Pour retirer une journee : la supprimer a la cle. */
 function exportCSV(){
   const rows=[['date','personnage','ca','sessions','ventes_co','avis','ca_backrooms','ca_b2b','ca_b2c']];
-  state.entries.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{const b=brOf(e)||{},bb=(e.detail&&e.detail.vendu&&e.detail.vendu.b2b)||null;
+  state.entries.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{const b=brOf(e)||{},bb=b2bOf(e);
     rows.push([e.date,e.gm,e.ca,e.sessions,e.options,e.avis,b.ca||0,bb?bb.ca:'',bb?bb.caB2C:'']);});
   const blob=new Blob(['﻿'+rows.map(r=>r.join(';')).join('\n')],{type:'text/csv'});
   const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download='gamedoor_saisies.csv';a.click();URL.revokeObjectURL(u);toast('⬇','Export CSV téléchargé');}

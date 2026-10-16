@@ -51,7 +51,7 @@ chaque journée (sans toucher `ca` / `sessions` / `avis`) :
 | Champ | Contenu | Usage dans le dashboard |
 |---|---|---|
 | `detail.vendu.rooms` / `detail.joue.rooms` | ventilation par **salle** `[nom, CA TTC, sessions, joueurs]` (salle lue dans « Session de jeu », ex. `PSYCHIATRIC - 3P - 21:30`) | détail de la dernière synchro |
-| `detail.vendu.b2b` | **part B2B** : `{ca, n, caB2C, nB2C}` — une facture est B2B dès qu'une de ses lignes porte une **Société** (TTC des lignes 411) | bloc « Répartition B2B / B2C » sous « Les chiffres » |
+| `detail.joue.b2b` | **part B2B à la date de l'évènement** : `{ca, n, caB2C, nB2C, base, sessions, joueurs, caJoue}` — une facture est B2B dès qu'une de ses lignes porte une **Société** (TTC des lignes 411 du journal « date de prestation », statuts payé + en attente). `detail.vendu.b2b` garde la même part à la date de commande, pour information | bloc « Répartition B2B / B2C » (onglets Jour … Année, Tout) |
 | `detail.backrooms` | **périmètre Backrooms** (activité arrêtée) : `{ca (net des codes BRVIP), brut, remises, sessions, joueurs, labels}` — reconnu par `/back\s*-?\s*rooms?\b|BRVIP/i` dans la salle, le produit, la catégorie ou le code (« BACK TO THE 80'S » ne matche pas) | retiré des comparaisons N-1, des records, de l'analyse par période et des objectifs automatiques (option « hors Backrooms » dans Réglages, cochée par défaut) |
 
 ### Compléter l'historique (une fois) — mode `enrich`

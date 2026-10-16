@@ -205,6 +205,9 @@ function aggregateRows(dayRows, I, mode) {
     // Mode "joue" (base date de prestation) : Room = sessions JOUEES ; Cheque =
     // bon ACHETE ce jour (a ajouter au CA, pas une session).
     if (mode === 'joue') {
+      // Lignes client (411) : TTC par facture -> part B2B a la DATE DE L'EVENEMENT
+      // (pas a la date d'encaissement ni de creation du devis).
+      if (cpt.startsWith('411')) { const m411 = numFR(r[iDeb]) - numFR(r[iCred]); if (fact) factTTC.set(fact, (factTTC.get(fact) || 0) + m411); continue; }
       if (!cpt.startsWith('70') || cpt.startsWith('709')) continue;
       const m = numFR(r[iCred]) - numFR(r[iDeb]);
       const chq = cat.includes('cheque') || cat.includes('carte cadeau') || cat.includes('bon cadeau');
@@ -255,11 +258,16 @@ function aggregateRows(dayRows, I, mode) {
     if (bkr && !isCheque) brAdd(ttcOf(m), (isRoom && !isGarantie) ? sessKey : '', qte, sessRaw || prodRaw);
   }
   const r2 = (x) => Math.round(x * 100) / 100;
-  // Part B2B (mode ventes) : une facture est B2B des qu'une de ses lignes porte une societe.
-  let caB2B = 0, nbB2B = 0, nbFact = 0;
-  for (const [f, m] of factTTC) { nbFact++; if (factB2B.has(f)) { caB2B += m; nbB2B++; } }
+  // Part B2B : une facture est B2B des qu'une de ses lignes porte une societe.
+  //   mode ventes -> a la date de commande (information) ; mode joue -> a la DATE DE
+  //   L'EVENEMENT (c'est celle-ci que le dashboard affiche). Si l'export « joue » ne
+  //   portait pas de lignes 411, repli sur les lignes Room (sessions jouees).
+  let caB2B = 0, nbB2B = 0, nbFact = 0, ttcFact = 0;
+  for (const [f, m] of factTTC) { nbFact++; ttcFact += m; if (factB2B.has(f)) { caB2B += m; nbB2B++; } }
   const b2b = mode === 'joue'
-    ? { sessions: b2bSess.size, joueurs: Math.round(b2bJoueurs), caJoue: r2(b2bCaJoue) }
+    ? (nbFact > 0
+      ? { ca: r2(caB2B), n: nbB2B, caB2C: r2(ttcFact - caB2B), nB2C: nbFact - nbB2B, base: 'factures', sessions: b2bSess.size, joueurs: Math.round(b2bJoueurs), caJoue: r2(b2bCaJoue) }
+      : { ca: r2(b2bCaJoue), n: b2bSess.size, caB2C: r2(ttc - b2bCaJoue), nB2C: sess.size - b2bSess.size, base: 'sessions', sessions: b2bSess.size, joueurs: Math.round(b2bJoueurs), caJoue: r2(b2bCaJoue) })
     : { ca: r2(caB2B), n: nbB2B, caB2C: r2(ttc - caB2B), nB2C: nbFact - nbB2B };
   return {
     ttc: r2(ttc), ht: r2(ht), tva: r2(tva), sessions: sess.size, joueurs: Math.round(joueurs),
@@ -292,7 +300,7 @@ function analyseJournal(filePath, dayFR, mode = 'ventes') {
     sessions: 0, joueurs: 0, caSessions: 0, caBonsCadeaux: 0, caProduits: 0, remises: 0,
     nbBonsCadeaux: 0, nbProduits: 0, produits: [], codes: [], rooms: [],
     backrooms: { ca: 0, remises: 0, net: 0, sessions: 0, joueurs: 0, labels: [] },
-    b2b: mode === 'joue' ? { sessions: 0, joueurs: 0, caJoue: 0 } : { ca: 0, n: 0, caB2C: 0, nB2C: 0 } };
+    b2b: mode === 'joue' ? { ca: 0, n: 0, caB2C: 0, nB2C: 0, base: 'factures', sessions: 0, joueurs: 0, caJoue: 0 } : { ca: 0, n: 0, caB2C: 0, nB2C: 0 } };
   if (!aoa.length) return empty;
   const headers = aoa[0].map((h) => String(h).trim());
   const rows = aoa.slice(1);
@@ -733,7 +741,7 @@ async function runEnrich(page, dumpDebug) {
     const v = vMap.get(d) || {}, j = jMap.get(d) || {}; const mk = d.slice(0, 7);
     const pm = perMonth[mk] = perMonth[mk] || { ca: 0, b2b: 0, br: 0, brSess: 0 };
     pm.ca += (v.ttc || 0) - (v.caBonsCadeaux || 0) + (j.caBonsCadeaux || 0);
-    pm.b2b += (v.b2b && v.b2b.ca) || 0; pm.br += (v.backrooms && v.backrooms.net) || 0; pm.brSess += (j.backrooms && j.backrooms.sessions) || 0;
+    pm.b2b += (j.b2b && j.b2b.ca) || 0; pm.br += (v.backrooms && v.backrooms.net) || 0; pm.brSess += (j.backrooms && j.backrooms.sessions) || 0;   // B2B a la date de l'evenement
     for (const r of (j.rooms || [])) { const t = roomsTot.get(r[0]) || { ca: 0, sess: 0 }; t.ca += r[1]; t.sess += r[2]; roomsTot.set(r[0], t); }
     for (const l of [...((v.backrooms && v.backrooms.labels) || []), ...((j.backrooms && j.backrooms.labels) || [])]) brLabels.add(l);
   }
@@ -741,7 +749,7 @@ async function runEnrich(page, dumpDebug) {
   log(allDates.length + ' jour(s) avec données. Salles jouées : ' + salles);
   log('Libellés reconnus comme Backrooms : ' + ([...brLabels].join(' | ') || 'aucun'));
   for (const [mk, p] of Object.entries(perMonth).sort()) {
-    log('  ' + mk + ' : CA ' + Math.round(p.ca) + ' € · B2B ' + Math.round(p.b2b) + ' € (' + (p.ca ? Math.round(p.b2b / p.ca * 100) : 0) + ' %) · Backrooms ' + Math.round(p.br) + ' € / ' + p.brSess + ' sess');
+    log('  ' + mk + ' : CA ' + Math.round(p.ca) + ' € · B2B (date evenement) ' + Math.round(p.b2b) + ' € (' + (p.ca ? Math.round(p.b2b / p.ca * 100) : 0) + ' %) · Backrooms ' + Math.round(p.br) + ' € / ' + p.brSess + ' sess');
   }
   if (CFG.dryRun) { log('DRY-RUN : rien écrit.'); return; }
 
@@ -878,7 +886,7 @@ async function main() {
     log(`   + cheques cadeaux ACHETES      : +${r2(joue.caBonsCadeaux)} €  (${joue.nbBonsCadeaux})`);
     log(`   ➜ CA ENCAISSE DU JOUR = ${caEncaisse} € TTC`);
     log(`🎮 ACTIVITE JOUEE (date de jeu)   = ${joue.sessions} session(s) jouee(s) · ${joue.joueurs} joueur(s) · CA joue ${joue.ttc} € TTC (cheques exclus)`);
-    log('🏢 B2B (commande au nom d\'une societe) = ' + ventes.b2b.ca + ' € sur ' + ventes.b2b.n + ' facture(s) · B2C ' + ventes.b2b.caB2C + ' € (' + ventes.b2b.nB2C + ')');
+    log('🏢 B2B a la date de l\'evenement = ' + joue.b2b.ca + ' € sur ' + joue.b2b.n + ' facture(s) · B2C ' + joue.b2b.caB2C + ' € (' + joue.b2b.nB2C + ') [base ' + joue.b2b.base + '] · (a la date de commande : B2B ' + ventes.b2b.ca + ' €, B2C ' + ventes.b2b.caB2C + ' €)');
     if (joue.rooms.length) log('🚪 Par salle (joue) : ' + joue.rooms.map((r) => r[0] + ' ' + r[1] + ' € / ' + r[2] + ' sess / ' + r[3] + ' j.').join(' · '));
     const brD = backroomsDetail(ventes, joue);
     if (brD.ca || brD.brut || brD.sessions) log('🕳️ Backrooms : ' + brD.ca + ' € nets (' + brD.sessions + ' sess jouees) — libelles : ' + brD.labels.join(' | '));
