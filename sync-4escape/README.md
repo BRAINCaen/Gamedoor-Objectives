@@ -82,11 +82,23 @@ clients facturés, surtout les entreprises) et 332 commandes rattachées. La car
 donc indicative ; pour l'enrichir, demander le code postal à la réservation dans le
 paramétrage 4escape. Rafraîchi le 1er de chaque mois.
 
-Premier enrichissement de l'historique (16/10/2026, 2020 → 2026) : **aucune vente
-Backrooms** n'apparaît dans le journal 4escape (mêmes quatre salles en 2025 et 2026) ;
-seuls 13 codes de prévente « BRVIP - Prevente Backroom » de 300 € ont été utilisés en
-paiement de parties classiques en oct.-nov. 2025. Le dashboard ne retire donc rien
-tant qu'un libellé de vente Backrooms n'est pas identifié (élargir `RE_BACKROOMS`).
+### Backrooms — salle masquée, retrouvée par l'export Commandes (`backrooms.mjs`)
+La salle **« PERDUS DANS LES BACKROOMS »** est masquée dans l'onglet Rooms de 4escape.
+Ses ventes (300 € la session de 6 joueurs) **sont dans le CA du journal** mais n'y
+portent aucun libellé : elles n'apparaissent que sur les lignes client (411), via un
+compte d'acompte, sans ligne de vente 70x — la détection par nom de salle du journal
+ne peut donc pas les voir (seuls les 13 codes de prévente « BRVIP » y figurent).
+Le robot `backrooms.mjs` (workflow **« Backrooms (salle masquée) → Gamedoor »**,
+manuel) exporte les **lignes de commande** (`/admin/orders?mode=order`, colonne
+« Room »), agrège par jour (CA par date de commande, sessions / joueurs par date
+d'évènement), vérifie que les totaux journaliers du journal coïncident avec les
+commandes (écart 0 € sur 48 jours le 16/10/2026) puis écrit `detail.backrooms`
+(`source: 'commandes'`, `dansJournal: true`) et le résumé mensuel
+`state/autoMeta/analyse/backrooms`. Relevé du 16/10/2026 : **17 750 € TTC**, 68
+sessions, 396 joueurs, du 05/10/2025 au 12/03/2026 (oct. 6 600 € · nov. 4 850 € ·
+déc. 900 € · janv. 2 700 € · févr. 2 400 € · mars 300 €). Le mode `enrich` conserve
+ces journées (il ne réécrit pas un `backrooms` de source `commandes`). Si une autre
+salle masquée doit être isolée un jour : entrée `room_match` du workflow.
 
 > Ces agrégats vivent sous `state/autoMeta/analyse` parce que les règles Firebase
 > actuelles n'autorisent aucune autre branche sous `/state` sans republication des

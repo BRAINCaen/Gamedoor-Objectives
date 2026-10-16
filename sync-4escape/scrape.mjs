@@ -749,7 +749,7 @@ async function runEnrich(page, dumpDebug) {
   let existing = {};
   try { const er = await fetch(rtdbUrl('/state/entries.json')); if (er.ok) existing = (await er.json()) || {}; } catch { /* vide */ }
   const keyOf = new Map(Object.entries(existing).filter(([, e]) => e && e.date).map(([k, e]) => [e.date, k]));
-  let done = 0, absent = 0, ko = 0;
+  let done = 0, absent = 0, ko = 0, proteges = 0;
   for (const date of allDates) {
     const key = keyOf.get(date);
     if (!key) { absent++; continue; }                          // journee inconnue : c'est le role du backfill
@@ -759,12 +759,18 @@ async function runEnrich(page, dumpDebug) {
       'joue/rooms': j.rooms || [], 'joue/b2b': j.b2b || null,
       backrooms: backroomsDetail(v, j), enrichedAt: new Date().toISOString(),
     };
+    // Les ventes de la salle MASQUEE « PERDUS DANS LES BACKROOMS » ne portent pas
+    // son nom dans le journal : elles sont retrouvees par backrooms.mjs (export
+    // Commandes, source 'commandes'). On ne les ecrase jamais avec la detection
+    // journal, qui ne verrait que les codes de prevente.
+    const ex = existing[key] && existing[key].detail && existing[key].detail.backrooms;
+    if (ex && ex.source === 'commandes') { delete patch.backrooms; proteges++; }
     const res = await fetch(rtdbUrl('/state/entries/' + key + '/detail.json'), {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
     });
     if (res.ok) done++; else { ko++; if (ko <= 5) log('⚠️ ' + date + ' : PATCH ' + res.status + ' ' + (await res.text()).slice(0, 120)); }
   }
-  log('✅ Enrichissement : ' + done + ' journée(s) complétée(s), ' + absent + ' absente(s) de la base (un backfill les créerait), ' + ko + ' échec(s).');
+  log('✅ Enrichissement : ' + done + ' journée(s) complétée(s), ' + absent + ' absente(s) de la base (un backfill les créerait), ' + ko + ' échec(s)' + (proteges ? ', ' + proteges + ' perimetre(s) Backrooms issus des commandes conserves' : '') + '.');
 }
 
 // ---------------------------------------------------------------------------
