@@ -240,6 +240,46 @@
   .codes-detail .code-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:var(--soft);padding:4px 0;border-bottom:1px solid var(--line)}
   .codes-detail .code-row:last-child{border-bottom:none}
 
+  /* ===== Répartition B2B / B2C ===== */
+  .b2b-tile{margin-top:14px;background:var(--bg-card);border:1px solid var(--line);border-radius:15px;padding:14px 16px}
+  .b2b-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .b2b-head .ct-name{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--soft);font-weight:800}
+  .b2b-split{display:flex;height:22px;border-radius:11px;overflow:hidden;background:var(--bg-elev)}
+  .b2b-split .b2b{background:linear-gradient(90deg,#1e40af,var(--blue));transition:width .8s cubic-bezier(.2,.8,.2,1)}
+  .b2b-split .b2c{background:linear-gradient(90deg,var(--gold),var(--gold-br));transition:width .8s cubic-bezier(.2,.8,.2,1)}
+  .b2b-legend{display:flex;justify-content:space-between;gap:10px;margin-top:9px;font-size:13px;flex-wrap:wrap}
+  .b2b-legend b{font-family:'Bebas Neue';font-size:26px;line-height:1;letter-spacing:.02em;margin-right:4px}
+  .b2b-legend .l-b2b b{color:var(--blue)} .b2b-legend .l-b2c b{color:var(--gold-br)}
+  .b2b-legend small{display:block;color:var(--mute);font-size:11px;font-family:'JetBrains Mono';margin-top:2px}
+  .b2b-legend .l-b2c{text-align:right}
+  .b2b-note{font-size:11px;color:var(--mute);margin-top:8px}
+  .hb-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;padding:3px 9px;border-radius:20px;background:rgba(192,132,252,.12);color:var(--purple);margin-left:8px;vertical-align:middle;letter-spacing:0}
+
+  /* ===== Carte : d'où viennent nos joueurs ===== */
+  .geo-wrap{display:grid;grid-template-columns:1.6fr 1fr;gap:14px}
+  @media(max-width:900px){.geo-wrap{grid-template-columns:1fr}}
+  .geo-map{height:440px;border-radius:14px;overflow:hidden;background:var(--bg-card);border:1px solid var(--line);position:relative;z-index:1}
+  .geo-map .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.72) contrast(.9) saturate(.5)}
+  .geo-map .leaflet-control-attribution{background:rgba(15,20,25,.75);color:var(--mute);font-size:9px}
+  .geo-map .leaflet-control-attribution a{color:var(--soft)}
+  .geo-map .leaflet-control-zoom a{background:var(--bg-elev);color:var(--ink);border-color:var(--line-s)}
+  .geo-map .leaflet-tooltip{background:var(--bg-elev);color:var(--ink);border:1px solid var(--line-s);font-family:'Manrope';font-size:12px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+  .geo-map .leaflet-tooltip-top:before{border-top-color:var(--line-s)}
+  .geo-side{display:flex;flex-direction:column;gap:12px;min-width:0}
+  .geo-zones,.geo-top{background:var(--bg-card);border:1px solid var(--line);border-radius:14px;padding:14px 15px}
+  .geo-side h3{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--soft);font-weight:800;margin-bottom:8px}
+  .zone-row{display:grid;grid-template-columns:1fr auto;gap:3px 10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .zone-row:last-child{border-bottom:none}
+  .zone-row .z-pct{font-family:'JetBrains Mono';font-weight:700;color:var(--gold)}
+  .zone-row .z-bar{grid-column:1 / -1;height:5px;background:var(--bg-elev);border-radius:3px;overflow:hidden}
+  .zone-row .z-bar div{height:100%;background:linear-gradient(90deg,var(--gold),var(--gold-br))}
+  .zone-row .z-n{color:var(--mute);font-size:11px;font-family:'JetBrains Mono';margin-left:6px}
+  .top-row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .top-row:last-child{border-bottom:none}
+  .top-row .t-cp{color:var(--mute);font-family:'JetBrains Mono';font-size:11px;margin-left:6px}
+  .top-row .t-n{font-family:'JetBrains Mono';font-weight:700;color:var(--soft);white-space:nowrap}
+  @media(max-width:640px){.geo-map{height:300px}.geo-zones,.geo-top{padding:11px 12px}.b2b-legend b{font-size:22px}.hb-pill{font-size:9.5px;padding:2px 7px;margin-left:4px}}
+
   /* ===== Sections repliables (détail, analyse, journal) ===== */
   details.fold{background:var(--bg-panel);border:1px solid var(--line);border-radius:16px;padding:2px 20px;margin-bottom:14px}
   details.fold summary{cursor:pointer;padding:15px 0;font-weight:800;font-size:15px;list-style:none;display:flex;align-items:center;gap:9px;color:var(--soft)}
@@ -422,7 +462,7 @@
   </div>
 
   <div class="card" id="cmpCard">
-    <h2>📊 Les chiffres · <span id="cmpTabName" style="color:var(--gold)">jour</span></h2>
+    <h2>📊 Les chiffres · <span id="cmpTabName" style="color:var(--gold)">jour</span><span class="hb-pill" id="hbPill" style="display:none">🕳️ hors Backrooms</span></h2>
     <div class="card-sub">Objectifs + comparaison avec l'an dernier — choisis ta période</div>
     <div class="cmp-tabs" id="cmpTabs">
       <button class="cmp-tab active" data-tab="jour" onclick="setCmpTab(this)">Jour</button>
@@ -435,6 +475,7 @@
     </div>
     <div class="cmp-period" id="cmpPeriod">—</div>
     <div class="cmp-grid" id="cmpGrid"></div>
+    <div id="b2bTile"></div>
   </div>
 
   <div class="card">
@@ -460,6 +501,20 @@
       <button class="cmp-tab" data-tab="tout" onclick="setVcTab(this)">Tout</button>
     </div>
     <div id="ventesCoBody" class="log-empty">En attente…</div>
+  </div>
+
+  <div class="card" id="geoCard">
+    <h2>🗺️ D'où viennent nos joueurs</h2>
+    <div class="card-sub" id="geoSub">Codes postaux des clients 4escape</div>
+    <div class="cmp-tabs" id="geoTabs"></div>
+    <div class="geo-wrap" style="display:none">
+      <div id="geoMap" class="geo-map"></div>
+      <div class="geo-side">
+        <div class="geo-zones" id="geoZones"></div>
+        <div class="geo-top" id="geoTop"></div>
+      </div>
+    </div>
+    <div class="log-empty" id="geoEmpty">En attente de la première collecte des codes postaux (robot « Origines des joueurs »)…</div>
   </div>
 
   <details class="fold" id="foldDetail">
@@ -494,6 +549,12 @@
   <details class="settings" id="settings">
     <summary>Réglages · objectifs</summary>
     <div class="settings-body">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);font-weight:800;margin:2px 0 10px">🕳️ Périmètre comparable — Backrooms (activité arrêtée)</div>
+      <label style="display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;margin-bottom:8px;cursor:pointer">
+        <input type="checkbox" id="hbOn" style="width:auto"> Retirer le CA des Backrooms des comparaisons N-1, des records et des objectifs automatiques
+      </label>
+      <div id="brInfo" style="background:var(--bg-card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--soft);line-height:1.6">—</div>
+      <div style="height:1px;background:var(--line);margin:18px 0"></div>
       <div style="font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);font-weight:800;margin:2px 0 10px">🎖 Objectifs CA du mois — 3 scénarios + dépassement</div>
       <div class="set-grid">
         <div class="field"><label>🥉 Bronze · pessimiste</label><input type="number" id="setBronze" min="0" step="500"><div class="hint">Plancher (reconduction)</div></div>
@@ -513,7 +574,7 @@
       <div class="set-grid">
         <div class="field"><label>Année des objectifs</label><input type="number" id="objYear" min="2024" step="1"><div class="hint">Ex. 2027</div></div>
         <div class="field"><label>CA de référence (€)</label><input type="number" id="objRefCA" min="0" step="1000"><div class="hint" id="objSeasonLabel">saisonnalité 2025</div></div>
-        <div class="field" style="display:flex;flex-direction:column;justify-content:flex-end"><button class="btn btn-ghost btn-sm" onclick="autoFromData()">📥 Récupérer depuis les données</button><div class="hint">CA + saisonnalité de l'année précédente</div></div>
+        <div class="field" style="display:flex;flex-direction:column;justify-content:flex-end"><button class="btn btn-ghost btn-sm" onclick="autoFromData()">📥 Récupérer depuis les données</button><div class="hint">CA + saisonnalité de l'année précédente (hors Backrooms si l'option est cochée)</div></div>
       </div>
       <div class="set-grid" style="margin-top:2px">
         <div class="field"><label>🥉 Bronze · croissance %</label><input type="number" id="gB" step="0.5"><div class="hint">0 = reconduction</div></div>
@@ -564,7 +625,9 @@ const DEFAULT_CFG={targetBronze:27000,targetArgent:30000,targetOr:33000,targetPl
   /* ---- objectifs automatiques (calculés par saisonnalité) ---- */
   autoOn:false, objYear:new Date().getFullYear(), refCA:322641,
   gBronze:0, gArgent:5, gOr:8.5, gPlatine:12,
-  season:SEASONALITY_2025, seasonLabel:'saisonnalité 2025 (Excel)'};
+  season:SEASONALITY_2025, seasonLabel:'saisonnalité 2025 (Excel)',
+  /* ---- périmètre comparable : Backrooms (activité arrêtée) retirées des comparaisons ---- */
+  horsBackrooms:true};
 const DEFAULT_ROSTER=[{name:'Game Master 1',avatar:'🎮'},{name:'Game Master 2',avatar:'🕹️'},{name:'Game Master 3',avatar:'🧩'},{name:'Game Master 4',avatar:'🔦'}];
 
 let MODE=null;            // 'firebase' | 'local'
@@ -654,6 +717,7 @@ function attachFB(){
     state.entries=v.entries?Object.keys(v.entries).map(k=>Object.assign({id:k},v.entries[k])):[];
     state.ventesCo=v.ventesCo||null;
     state.ventesCoLegacy=v.ventesCoLegacy||null;
+    state.analyse=(v.autoMeta&&v.autoMeta.analyse)||null;   // origines (codes postaux) calculées par le robot
     if(v.config===undefined){db.ref('state/config').set(state.config);}
     if(v.roster===undefined){db.ref('state/roster').set(state.roster);}
     syncPill('on');
@@ -713,6 +777,18 @@ function fmt(n){return Math.round(n).toLocaleString('fr-FR');}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function monthEntries(){const mk=curMonth();return state.entries.filter(e=>monthKey(e.date)===mk);}
 function sum(arr,f){return arr.reduce((a,e)=>a+(f(e)||0),0);}
+/* ---- Périmètre comparable ----
+   Les Backrooms (activité arrêtée) sont retirées du CA, des sessions et des
+   joueurs quand l'option est active : detail.backrooms est rempli par le robot
+   (chaque nuit, et par le mode --enrich pour l'historique). */
+function brOf(e){return (e&&e.detail&&e.detail.backrooms)||null;}
+function hb(){return state.config.horsBackrooms!==false;}
+function caOf(e){const b=hb()?brOf(e):null;return (e.ca||0)-(b?(b.ca||0):0);}
+function sessOf(e){const b=hb()?brOf(e):null;return (e.sessions||0)-(b?(b.sessions||0):0);}
+function jouOf(e){const b=hb()?brOf(e):null;return (e.players||0)-(b?(b.joueurs||0):0);}
+function brSum(es){let ca=0,s=0,j=0,n=0;for(const e of es){const b=brOf(e);if(b&&(b.ca||b.sessions)){ca+=b.ca||0;s+=b.sessions||0;j+=b.joueurs||0;n++;}}return {ca,sessions:s,joueurs:j,days:n};}
+/* Part B2B : montants TTC facturés aux commandes passées au nom d'une société (detail.vendu.b2b) */
+function b2bSum(es){let ca=0,caB2C=0,n=0,nB2C=0,days=0;for(const e of es){const b=e.detail&&e.detail.vendu&&e.detail.vendu.b2b;if(!b)continue;days++;ca+=b.ca||0;caB2C+=b.caB2C||0;n+=b.n||0;nB2C+=b.nB2C||0;}return {ca,caB2C,n,nB2C,days};}
 function avatarOf(name){const r=state.roster.find(x=>x.name===name);return r?r.avatar:'🎮';}
 /* ---- Objectifs effectifs du mois en cours ----
    Si autoOn : paliers = CA réf × (1 + croissance) × part du mois (saisonnalité).
@@ -738,10 +814,11 @@ function yearAgg(year){
   const s=year+'-01-01', e=year+'-12-31';
   const es=state.entries.filter(x=>x.ca!=null&&x.date>=s&&x.date<=e);
   const monthly=new Array(12).fill(0); let tot=0;
-  es.forEach(x=>{const m=parseInt(x.date.slice(5,7),10)-1; if(m>=0&&m<12){monthly[m]+=x.ca; tot+=x.ca;}});
+  // Périmètre comparable (hors Backrooms si l'option est active) : objectifs « réels »
+  es.forEach(x=>{const m=parseInt(x.date.slice(5,7),10)-1; const c=caOf(x); if(m>=0&&m<12){monthly[m]+=c; tot+=c;}});
   const season=tot>0?monthly.map(v=>v/tot):null;
   const monthsWithData=monthly.filter(v=>v>0).length;
-  return {ca:tot,monthly,season,monthsWithData};
+  return {ca:tot,monthly,season,monthsWithData,brut:sum(es,x=>x.ca),br:brSum(es)};
 }
 /* ---- Récupérer la référence depuis les vraies données de l'année précédente ---- */
 function autoFromData(){
@@ -750,9 +827,9 @@ function autoFromData(){
   if(y.ca<=0){toast('⚠️','Aucune donnée '+refYear+' dans l\'appli — garde la référence actuelle');return;}
   C.refCA=Math.round(y.ca);
   if(y.season) C.season=y.season;
-  C.seasonLabel='données '+refYear+' ('+y.monthsWithData+'/12 mois)';
+  C.seasonLabel='données '+refYear+' ('+y.monthsWithData+'/12 mois'+(hb()&&y.br.ca>0?', hors Backrooms':'')+')';
   writeConfig(); bindObjUI(); render();
-  toast('📥','Référence '+refYear+' : '+fmt(C.refCA)+' € ('+y.monthsWithData+' mois de données)');
+  toast('📥','Référence '+refYear+' : '+fmt(C.refCA)+' € ('+y.monthsWithData+' mois de données'+(hb()&&y.br.ca>0?', Backrooms retirées : '+fmt(y.br.ca)+' €':'')+')');
 }
 /* ---- Bascule d'année automatique ---- */
 let rolloverDone=false;
@@ -761,7 +838,7 @@ function autoRollover(){
   const curY=new Date().getFullYear();
   if((C.objYear||0)!==curY){
     const y=yearAgg(curY-1);
-    if(y.ca>0){C.refCA=Math.round(y.ca); if(y.season)C.season=y.season; C.seasonLabel='données '+(curY-1)+' (auto)';}
+    if(y.ca>0){C.refCA=Math.round(y.ca); if(y.season)C.season=y.season; C.seasonLabel='données '+(curY-1)+' (auto'+(hb()&&y.br.ca>0?', hors Backrooms':'')+')';}
     C.objYear=curY; writeConfig();
     toast('🎯','Objectifs '+curY+' calculés automatiquement à partir du réel '+(curY-1));
   }
@@ -812,8 +889,9 @@ function computePeriods(anchor,tab,complete){
 }
 function periodAgg(startYMD,endYMD){
   const es=state.entries.filter(e=>e.ca!=null&&e.date>=startYMD&&e.date<=endYMD);
-  const ca=sum(es,e=>e.ca),ses=sum(es,e=>e.sessions),jo=sum(es,e=>e.players),av=sum(es,e=>e.avis);
-  return {ca,sessions:ses,joueurs:jo,avis:av,days:es.length,panier:ses>0?ca/ses:0};
+  // Périmètre comparable : CA / sessions / joueurs hors Backrooms si l'option est active
+  const ca=sum(es,caOf),ses=sum(es,sessOf),jo=sum(es,jouOf),av=sum(es,e=>e.avis);
+  return {ca,sessions:ses,joueurs:jo,avis:av,days:es.length,panier:ses>0?ca/ses:0,brut:sum(es,e=>e.ca),br:brSum(es),b2b:b2bSum(es)};
 }
 function setCmpTab(btn){CMP_TAB=btn.dataset.tab;CMP_OFFSET=0;[...document.querySelectorAll('#cmpTabs .cmp-tab:not(.cmp-nav)')].forEach(b=>b.classList.toggle('active',b===btn));renderCompare();}
 
@@ -883,6 +961,11 @@ function renderCompare(){
     (CMP_OFFSET!==0?' <button class="cmp-back" onclick="cmpReset()">⟲ revenir à maintenant</button>':'');
   const cur=periodAgg(P.curStart,P.curEnd), prev=periodAgg(P.prevStart,P.prevEnd);
   const hasPrev=prev.days>0;
+  // Pastille « hors Backrooms » dès que le périmètre retiré n'est pas nul (période ou N-1)
+  const pill=document.getElementById('hbPill');
+  if(pill){const brT=hb()?(cur.br.ca+prev.br.ca):0; pill.style.display=brT>0?'inline-flex':'none';
+    pill.title='Backrooms retirées : '+fmt(cur.br.ca)+' € sur la période · '+fmt(prev.br.ca)+' € sur N-1';
+    pill.textContent='🕳️ hors Backrooms'+(prev.br.ca>0?' (N‑1 −'+fmt(prev.br.ca)+' €)':'');}
   const TG=periodTargets(CMP_TAB,anchor);
   const ratio=cur.sessions>0?cur.joueurs/cur.sessions:0;
   const eur=v=>fmt(v)+' €';
@@ -913,6 +996,32 @@ function renderCompare(){
       '<div class="ct-foot"><span class="ct-obj'+(done?' done':'')+'">'+objTxt+'</span><span class="ct-n1">N‑1 '+(hasPrev?m.f(m.prev):'—')+'</span></div>'+
       '</div>';
   }).join('');
+  renderB2B(cur,prev);
+}
+
+/* ---- Répartition B2B / B2C sur la période affichée ----
+   B2B = commande passée au nom d'une société dans 4escape (montants TTC
+   facturés, detail.vendu.b2b écrit par le robot). ---- */
+function renderB2B(cur,prev){
+  const el=document.getElementById('b2bTile'); if(!el)return;
+  const b=cur.b2b, p=prev.b2b, tot=b.ca+b.caB2C, ptot=p.ca+p.caB2C;
+  if(!b.days||tot<=0){
+    el.innerHTML='<div class="b2b-tile"><div class="b2b-head"><span class="ct-name">🏢 Répartition B2B / B2C</span></div>'+
+      '<div class="b2b-note">Pas encore de donnée B2B sur cette période. Le robot l\'enregistre chaque nuit depuis le 16/10/2026 ; pour les périodes passées, lance l\'enrichissement de l\'historique (GitHub → Actions → « Synchro 4escape → Gamedoor » → enrich).</div></div>';
+    return;}
+  const pct=Math.round(b.ca/tot*100), pctC=100-pct;
+  const ppct=ptot>0?Math.round(p.ca/ptot*100):null;
+  const dp=ppct==null?0:pct-ppct;
+  const delta=ppct==null?'<span class="ct-delta flat">N‑1 —</span>':'<span class="ct-delta '+(dp>0?'up':dp<0?'down':'flat')+'">'+(dp>0?'▲':dp<0?'▼':'▬')+' '+(dp>0?'+':'')+dp+' pt vs N‑1</span>';
+  const partiel=b.days<cur.days?' · sur '+b.days+'/'+cur.days+' jours renseignés':'';
+  el.innerHTML='<div class="b2b-tile">'+
+    '<div class="b2b-head"><span class="ct-name">🏢 Répartition B2B / B2C · '+(TAB_NAMES[CMP_TAB]||'')+'</span>'+delta+'</div>'+
+    '<div class="b2b-split"><div class="b2b" style="width:'+pct+'%"></div><div class="b2c" style="width:'+pctC+'%"></div></div>'+
+    '<div class="b2b-legend">'+
+      '<div class="l-b2b"><b>'+pct+' %</b>B2B · entreprises, CSE<small>'+fmt(b.ca)+' € · '+b.n+' commande'+(b.n>1?'s':'')+(ppct!=null?' · N‑1 : '+ppct+' %':'')+'</small></div>'+
+      '<div class="l-b2c"><b>'+pctC+' %</b>B2C · particuliers<small>'+fmt(b.caB2C)+' € · '+b.nB2C+' commande'+(b.nB2C>1?'s':'')+(ppct!=null?' · N‑1 : '+(100-ppct)+' %':'')+'</small></div>'+
+    '</div>'+
+    '<div class="b2b-note">B2B = commande passée au nom d\'une société dans 4escape (montants TTC facturés)'+partiel+'</div></div>';
 }
 function toggleCodes(){const d=document.getElementById('codesDetail'),t=document.getElementById('codesTog');if(!d)return;const open=d.style.display==='none';d.style.display=open?'block':'none';if(t)t.textContent=open?'－':'＋';}
 
@@ -997,10 +1106,115 @@ function renderMulti(){
     '</tbody></table>';
   const best=rows.find(r=>r.ca===maxCa);
   const moy=Math.round(rows.reduce((a,r)=>a+r.ca,0)/rows.length);
-  ins.innerHTML='Plage <b>'+jour(sMD)+' → '+jour(eMD)+'</b> · meilleure année : <b>'+best.y+'</b> ('+fmt(best.ca)+' €) · moyenne '+fmt(moy)+' € sur '+rows.length+' ans';
+  const brTot=hb()?rows.reduce((a,r)=>a+(r.br?r.br.ca:0),0):0;
+  ins.innerHTML='Plage <b>'+jour(sMD)+' → '+jour(eMD)+'</b> · meilleure année : <b>'+best.y+'</b> ('+fmt(best.ca)+' €) · moyenne '+fmt(moy)+' € sur '+rows.length+' ans'+
+    (brTot>0?' · <span style="color:var(--purple)">🕳️ hors Backrooms (−'+fmt(brTot)+' € retirés)</span>':'');
 }
 
 if(typeof window!=='undefined')window.__computePeriods=computePeriods;
+
+/* ============================================================
+   CARTE — d'où viennent nos joueurs
+   Données : autoMeta/analyse/origines (comptages par code postal géocodés,
+   écrits par le robot origines.mjs — aucune donnée nominative).
+   Leaflet + tuiles OpenStreetMap chargés à la demande, seulement s'il y a
+   des données (la page reste légère sur la TV de la salle de pause).
+   ============================================================ */
+let GEO_TAB='tout', GEO_MAP=null, GEO_LAYER=null, LEAFLET_STATE=null;
+const CAEN=[49.1829,-0.3707];
+const IDF=new Set(['75','77','78','91','92','93','94','95']), NORMANDIE=new Set(['14','27','50','61','76']);
+const ZONES=['Caen & agglo (< 15 km)','Reste du Calvados','Reste de la Normandie','Île-de-France','Reste de la France','Étranger'];
+function distKm(lat,lon){const R=6371,toR=x=>x*Math.PI/180;const dl=toR(lat-CAEN[0]),dn=toR(lon-CAEN[1]);
+  const a=Math.sin(dl/2)**2+Math.cos(toR(CAEN[0]))*Math.cos(toR(lat))*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(a));}
+function zoneOf(b){
+  if(b.lat==null)return ZONES[5];
+  if(distKm(b.lat,b.lon)<15)return ZONES[0];
+  if(b.dep==='14')return ZONES[1];
+  if(NORMANDIE.has(b.dep))return ZONES[2];
+  if(IDF.has(b.dep))return ZONES[3];
+  return ZONES[4];
+}
+function setGeoTab(btn){GEO_TAB=btn.dataset.tab;[...document.querySelectorAll('#geoTabs .cmp-tab')].forEach(b=>b.classList.toggle('active',b===btn));renderGeo();}
+function renderGeo(){
+  const card=document.getElementById('geoCard'); if(!card)return;
+  const empty=document.getElementById('geoEmpty'),wrap=card.querySelector('.geo-wrap'),tabs=document.getElementById('geoTabs'),sub=document.getElementById('geoSub');
+  const O=state.analyse&&state.analyse.origines;
+  if(!O||!O.parCP||!Object.keys(O.parCP).length){empty.style.display='block';wrap.style.display='none';tabs.innerHTML='';sub.textContent='Codes postaux des clients 4escape';return;}
+  empty.style.display='none';wrap.style.display='grid';
+  const hasCmd=!!(O.totaux&&O.totaux.commandes>0);          // commandes rattachées ? sinon on compte les clients
+  const years=(O.annees||[]).filter(y=>+y>=2022).slice().sort().reverse();
+  const want=['tout'].concat(hasCmd?years:[]);
+  if(tabs.dataset.sig!==want.join(',')){tabs.dataset.sig=want.join(',');
+    tabs.innerHTML=want.map(t=>'<button class="cmp-tab'+(t===GEO_TAB?' active':'')+'" data-tab="'+t+'" onclick="setGeoTab(this)">'+(t==='tout'?'Tout':t)+'</button>').join('');}
+  if(!want.includes(GEO_TAB))GEO_TAB='tout';
+  const pts=[]; let tot=0,totJ=0;
+  for(const cp of Object.keys(O.parCP)){const b=O.parCP[cp]; let n,j;
+    if(GEO_TAB==='tout'){n=hasCmd?(b.commandes||0):(b.clients||0);j=b.joueurs||0;}
+    else{const a=(b.parAnnee||{})[GEO_TAB];n=a?a[0]:0;j=a?a[1]:0;}
+    if(n>0&&b.lat!=null){pts.push({cp,n,j,b});tot+=n;totJ+=j;}}
+  const unit=hasCmd?'commande':'client';
+  const maj=O.majLe?new Date(O.majLe).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}):'';
+  const zones={}; for(const p of pts){const z=zoneOf(p.b);zones[z]=(zones[z]||0)+p.n;}
+  if(GEO_TAB==='tout'&&O.etranger){const etr=Object.values(O.etranger).reduce((a,x)=>a+(hasCmd?(x.commandes||0):(x.clients||0)),0);
+    if(etr>0){zones[ZONES[5]]=(zones[ZONES[5]]||0)+etr;tot+=etr;}}
+  sub.textContent=fmt(tot)+' '+unit+(tot>1?'s':'')+(hasCmd&&totJ?' · '+fmt(totJ)+' joueurs':'')+' · '+pts.length+' codes postaux'+(maj?' · relevé du '+maj:'');
+  document.getElementById('geoZones').innerHTML='<h3>Répartition</h3>'+ZONES.filter(z=>zones[z]).map(z=>{const pct=tot?Math.round(zones[z]/tot*100):0;
+    return '<div class="zone-row"><span>'+z+'<span class="z-n">'+fmt(zones[z])+'</span></span><span class="z-pct">'+pct+' %</span><div class="z-bar"><div style="width:'+pct+'%"></div></div></div>';}).join('');
+  const top=pts.slice().sort((a,b)=>b.n-a.n).slice(0,10);
+  document.getElementById('geoTop').innerHTML='<h3>Top communes</h3>'+top.map(p=>'<div class="top-row"><span>'+esc(p.b.ville||'?')+'<span class="t-cp">'+esc(p.cp)+'</span></span><span class="t-n">'+fmt(p.n)+' · '+(tot?Math.round(p.n/tot*100):0)+' %</span></div>').join('');
+  drawGeoMap(pts,unit);
+}
+function loadLeaflet(cb){
+  if(window.L){cb();return;}
+  if(LEAFLET_STATE==='loading'){document.addEventListener('leaflet-ready',cb,{once:true});return;}
+  LEAFLET_STATE='loading';
+  const css=document.createElement('link');css.rel='stylesheet';css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';document.head.appendChild(css);
+  const s=document.createElement('script');s.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+  s.onload=()=>{LEAFLET_STATE='ready';document.dispatchEvent(new Event('leaflet-ready'));cb();};
+  s.onerror=()=>{LEAFLET_STATE=null;const m=document.getElementById('geoMap');if(m)m.innerHTML='<div class="log-empty">Carte indisponible (bibliothèque non chargée)</div>';};
+  document.head.appendChild(s);
+}
+function drawGeoMap(pts,unit){
+  loadLeaflet(()=>{
+    const el=document.getElementById('geoMap'); if(!el)return;
+    if(!GEO_MAP){
+      GEO_MAP=L.map(el,{scrollWheelZoom:false}).setView(CAEN,8);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(GEO_MAP);
+      GEO_LAYER=L.layerGroup().addTo(GEO_MAP);
+    }
+    GEO_LAYER.clearLayers();
+    if(!pts.length)return;
+    const max=Math.max(...pts.map(p=>p.n)), tot=pts.reduce((a,p)=>a+p.n,0);
+    pts.slice().sort((a,b)=>b.n-a.n).forEach(p=>{
+      const r=5+16*Math.sqrt(p.n/max);
+      L.circleMarker([p.b.lat,p.b.lon],{radius:r,color:'#E8B14A',weight:1,fillColor:'#FFCC5C',fillOpacity:.55})
+        .bindTooltip('<b>'+esc(p.b.ville||'?')+'</b> '+esc(p.cp)+'<br>'+fmt(p.n)+' '+unit+(p.n>1?'s':'')+' · '+Math.round(p.n/tot*100)+' %'+(p.j?'<br>'+fmt(p.j)+' joueurs':''),{direction:'top'})
+        .addTo(GEO_LAYER);
+    });
+    // Cadrage initial : la Normandie élargie (les points très lointains ne dézooment pas la carte)
+    if(!GEO_MAP._fitDone){GEO_MAP._fitDone=true;
+      const near=pts.filter(p=>distKm(p.b.lat,p.b.lon)<250).map(p=>[p.b.lat,p.b.lon]);
+      if(near.length)GEO_MAP.fitBounds(L.latLngBounds(near),{padding:[20,20],maxZoom:10});}
+    setTimeout(()=>GEO_MAP.invalidateSize(),60);
+  });
+}
+
+/* ---- Backrooms : résumé dans les réglages (ce qui est retiré, et l'effet sur les objectifs) ---- */
+function renderBrInfo(){
+  const el=document.getElementById('brInfo'); if(!el)return;
+  const enriched=state.entries.filter(e=>e.detail&&e.detail.backrooms).length;
+  if(!enriched){el.innerHTML='Aucune journée ne porte encore le détail Backrooms. Lance l\'enrichissement de l\'historique (GitHub → Actions → « Synchro 4escape → Gamedoor » → Run workflow → <b>enrich = 2025-01-01:2025-12-31</b>, puis la même chose pour 2026) : les comparaisons N-1 et les objectifs retireront alors leur chiffre d\'affaires.';return;}
+  const byYear={}; let days=0;
+  for(const e of state.entries){const b=brOf(e);if(b&&(b.ca||b.sessions)){const y=e.date.slice(0,4);const o=byYear[y]=byYear[y]||{ca:0,s:0,j:0,first:e.date,last:e.date};o.ca+=b.ca||0;o.s+=b.sessions||0;o.j+=b.joueurs||0;if(e.date<o.first)o.first=e.date;if(e.date>o.last)o.last=e.date;days++;}}
+  const ys=Object.keys(byYear).sort();
+  if(!ys.length){el.innerHTML=enriched+' journées analysées — aucune vente Backrooms repérée.';return;}
+  const jour=(ds)=>new Date(ds+'T00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
+  const lignes=ys.map(y=>{const o=byYear[y];const es=state.entries.filter(x=>x.date.startsWith(y));const brut=sum(es,x=>x.ca||0);const mois=new Set(es.map(x=>x.date.slice(0,7))).size||1;
+    return '<b>'+y+'</b> ('+jour(o.first)+' → '+jour(o.last)+') : '+fmt(o.ca)+' € · '+o.s+' sessions · '+o.j+' joueurs — CA '+y+' : '+fmt(brut)+' € brut → <b>'+fmt(brut-o.ca)+' € hors Backrooms</b> ('+fmt((brut-o.ca)/mois)+' €/mois en moyenne sur '+mois+' mois)';}).join('<br>');
+  el.innerHTML='🕳️ Backrooms repérées sur '+days+' journée(s) :<br>'+lignes+
+    (hb()?'<br><span style="color:var(--green)">✔ Retirées des comparaisons N-1, des records, de l\'analyse par période et des objectifs automatiques.</span>'
+         :'<br><span style="color:var(--gold)">⚠ Incluses pour l\'instant (option décochée).</span>');
+}
 
 const BADGE_DEFS=[
   {id:'ca50',ic:'🥉',name:'Premier palier',desc:'Objectif Bronze atteint',test:m=>m.ca>=state.config.targetBronze},
@@ -1019,9 +1233,9 @@ function render(){
   const C=state.config;
   const me=monthEntries();
   const lday=latestDay(), te=lday?me.filter(e=>e.date===lday):[];
-  const caM=sum(me,e=>e.ca), sessM=sum(me,e=>e.sessions), avisM=sum(me,e=>e.avis), joueursM=sum(me,e=>e.players);
+  const caM=sum(me,caOf), sessM=sum(me,sessOf), avisM=sum(me,e=>e.avis), joueursM=sum(me,jouOf);
   const panier=sessM>0?caM/sessM:0;
-  const caT=sum(te,e=>e.ca), sessT=sum(te,e=>e.sessions), avisT=sum(te,e=>e.avis);
+  const caT=sum(te,caOf), sessT=sum(te,sessOf), avisT=sum(te,e=>e.avis);
   const panierT=sessT>0?caT/sessT:0;
 
   document.getElementById('heroMonth').textContent=monthLabel(curMonth());
@@ -1075,27 +1289,32 @@ function render(){
       line('🛍️ Autres produits',euro(v.produits)+(v.listeProduits&&v.listeProduits.length?' · '+esc(v.listeProduits.join(', ')):''))+
       remisesBlock+
       line('🎮 Sessions jouées',(j.sessions||0)+' · '+(j.joueurs||0)+' joueurs')+
+      (j.rooms&&j.rooms.length?line('🚪 Par salle (jouées)',esc(j.rooms.map(r=>r[0]+' · '+r[2]+' sess · '+fmt(r[1])+' €').join('  |  '))):'')+
+      (v.b2b?line('🏢 B2B · B2C (facturé)',fmt(v.b2b.ca)+' € ('+(v.b2b.n||0)+') · '+fmt(v.b2b.caB2C)+' € ('+(v.b2b.nB2C||0)+')'):'')+
+      (d.backrooms&&(d.backrooms.ca||d.backrooms.sessions)?line('🕳️ Backrooms',fmt(d.backrooms.ca)+' € nets · '+(d.backrooms.sessions||0)+' sess'):'')+
       line('⭐ Avis Google',(d.avisGoogle?('total '+d.avisGoogle.totalAvis+' · note '+(d.avisGoogle.note||'—')+' · +'+(d.avisGoogle.nouveaux||0)+' ce jour'):'—'));}
 
-  // Records de l'équipe (collectif, sans nommer personne)
-  const allPos=state.entries.filter(e=>e.ca>0);
-  const bestAll=allPos.reduce((b,e)=> e.ca>(b?b.ca:0)?e:b, null);
-  const bestMonth=me.filter(e=>e.ca>0).reduce((b,e)=> e.ca>(b?b.ca:0)?e:b, null);
-  const bestPlayers=allPos.reduce((b,e)=> (e.players||0)>(b?(b.players||0):0)?e:b, null);
+  // Records de l'équipe (collectif, sans nommer personne) — périmètre comparable (hors Backrooms)
+  const allPos=state.entries.filter(e=>caOf(e)>0);
+  const bestAll=allPos.reduce((b,e)=> caOf(e)>(b?caOf(b):0)?e:b, null);
+  const bestMonth=me.filter(e=>caOf(e)>0).reduce((b,e)=> caOf(e)>(b?caOf(b):0)?e:b, null);
+  const bestPlayers=allPos.reduce((b,e)=> jouOf(e)>(b?jouOf(b):0)?e:b, null);
   const wk={};
-  for(const e of allPos){const d=new Date(e.date+'T00:00');const dow=(d.getDay()+6)%7;const mon=new Date(d);mon.setDate(d.getDate()-dow);const k=ymd(mon);wk[k]=(wk[k]||0)+e.ca;}
+  for(const e of allPos){const d=new Date(e.date+'T00:00');const dow=(d.getDay()+6)%7;const mon=new Date(d);mon.setDate(d.getDate()-dow);const k=ymd(mon);wk[k]=(wk[k]||0)+caOf(e);}
   const bestWk=Object.entries(wk).sort((a,b)=>b[1]-a[1])[0];
   const jour=(ds)=>ds?new Date(ds+'T00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long'}):'—';
   const setTxt=(id,t)=>{const el=document.getElementById(id);if(el)el.textContent=t;};
-  setTxt('rRecord',fmt(bestAll?bestAll.ca:0)+' €'); setTxt('rRecordDate',bestAll?jour(bestAll.date):'—');
-  setTxt('rBestDay',fmt(bestMonth?bestMonth.ca:0)+' €'); setTxt('rBestDayDate',bestMonth?jour(bestMonth.date):'ce mois');
+  setTxt('rRecord',fmt(bestAll?caOf(bestAll):0)+' €'); setTxt('rRecordDate',bestAll?jour(bestAll.date):'—');
+  setTxt('rBestDay',fmt(bestMonth?caOf(bestMonth):0)+' €'); setTxt('rBestDayDate',bestMonth?jour(bestMonth.date):'ce mois');
   setTxt('rBestWeek',fmt(bestWk?bestWk[1]:0)+' €'); setTxt('rBestWeekLabel',bestWk?('semaine du '+jour(bestWk[0])):'—');
-  setTxt('rBestPlayers',fmt(bestPlayers?(bestPlayers.players||0):0)); setTxt('rBestPlayersDate',bestPlayers?jour(bestPlayers.date):'—');
+  setTxt('rBestPlayers',fmt(bestPlayers?jouOf(bestPlayers):0)); setTxt('rBestPlayersDate',bestPlayers?jour(bestPlayers.date):'—');
   const rFlag=document.getElementById('rFlag');
-  if(rFlag){ if(bestAll&&lday&&bestAll.date===lday&&allPos.length>1){rFlag.style.display='block';rFlag.className='day-goal';rFlag.innerHTML='🎉 Nouveau record de CA battu : '+fmt(bestAll.ca)+' € le '+jour(bestAll.date)+' !';}
+  if(rFlag){ if(bestAll&&lday&&bestAll.date===lday&&allPos.length>1){rFlag.style.display='block';rFlag.className='day-goal';rFlag.innerHTML='🎉 Nouveau record de CA battu : '+fmt(caOf(bestAll))+' € le '+jour(bestAll.date)+' !';}
     else rFlag.style.display='none'; }
 
   renderVentes();
+  renderGeo();
+  renderBrInfo();
 
   const log=document.getElementById('log');
   const sorted=me.slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,25);
@@ -1123,6 +1342,8 @@ function bindSettings(){
 function bindObjUI(){
   const C=state.config;
   const set=(id,val)=>{const el=document.getElementById(id); if(el&&document.activeElement!==el) el.value=val;};
+  // Périmètre comparable : retirer les Backrooms (partagé entre tous les appareils via la config)
+  const hbEl=document.getElementById('hbOn'); if(hbEl){ if(document.activeElement!==hbEl) hbEl.checked=hb(); hbEl.onchange=()=>{C.horsBackrooms=hbEl.checked; writeConfig(); render();}; }
   const on=document.getElementById('objOn'); if(on){ if(document.activeElement!==on) on.checked=!!C.autoOn; on.onchange=()=>{C.autoOn=on.checked; writeConfig(); if(C.autoOn)autoRollover(); render(); renderObjPreview();};}
   set('objYear',C.objYear); set('objRefCA',Math.round(C.refCA||0));
   set('gB',C.gBronze); set('gA',C.gArgent); set('gO',C.gOr); set('gP',C.gPlatine);
@@ -1165,8 +1386,9 @@ function resetMonth(){if(!confirm('Nouveau mois : effacer les saisies du mois en
    l'effacement global de /state/entries (2164 journees depuis 2020). Voir
    SECURITE-FIREBASE.md. Pour retirer une journee : la supprimer a la cle. */
 function exportCSV(){
-  const rows=[['date','personnage','ca','sessions','ventes_co','avis']];
-  state.entries.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>rows.push([e.date,e.gm,e.ca,e.sessions,e.options,e.avis]));
+  const rows=[['date','personnage','ca','sessions','ventes_co','avis','ca_backrooms','ca_b2b','ca_b2c']];
+  state.entries.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{const b=brOf(e)||{},bb=(e.detail&&e.detail.vendu&&e.detail.vendu.b2b)||null;
+    rows.push([e.date,e.gm,e.ca,e.sessions,e.options,e.avis,b.ca||0,bb?bb.ca:'',bb?bb.caB2C:'']);});
   const blob=new Blob(['﻿'+rows.map(r=>r.join(';')).join('\n')],{type:'text/csv'});
   const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download='gamedoor_saisies.csv';a.click();URL.revokeObjectURL(u);toast('⬇','Export CSV téléchargé');}
 

@@ -79,6 +79,17 @@ automatique, il n'a plus vraiment d'usage et il efface les données du mois en c
 robot les réécrive (l'anti-doublon `lastSync` ne retraite que la veille). À retirer aussi, à
 décider.
 
+## Agrégats du 16/10/2026 (origines, géocodage)
+
+Les comptages par code postal de la carte « D'où viennent nos joueurs » et le cache de
+géocodage sont écrits par le robot `origines.mjs` sous **`/state/autoMeta/analyse`**
+(`origines`, `geo`). Ce choix tient à la règle `"$inconnu": { ".validate": false }` :
+toute nouvelle branche directe sous `/state` exigerait de republier les règles (donc une
+session `firebase login` sur un poste). `autoMeta` est déjà ouvert en écriture aux
+clients authentifiés et ne porte aucune donnée nominative. La ventilation par salle, la
+part B2B et le périmètre Backrooms, eux, vivent dans `detail.*` de chaque journée
+(`"$autre": { ".validate": true }`), écrits par `PUT` quotidien ou `PATCH` d'enrichissement.
+
 ## Limite connue
 
 L'authentification anonyme est ouverte : n'importe qui peut demander un jeton au projet.

@@ -16,6 +16,9 @@
 //     · joueurs presents + CA joue TTC (bonus)
 //
 //  Le dashboard recoit :  ca = CA encaisse · sessions = sessions JOUEES.
+//  Depuis le 16/10/2026, detail.* porte aussi : la ventilation par SALLE, le
+//  perimetre BACKROOMS (activite arretee, retiree des comparaisons N-1) et la
+//  part B2B (commande au nom d'une societe). Mode --enrich pour l'historique.
 //
 //  Calibre les 2026-07-21 sur exports reels (controle comptable au centime :
 //  HT + TVA = TTC). Test local :  node scrape.mjs --headful --dry-run
@@ -59,6 +62,7 @@ const CFG = {
   journalPath:  process.env.JOURNAL_PATH || '/admin/statistics/accounting/journal-sales',
   dateArg:      getArg('date') || process.env.TARGET_DATE || '',   // defaut = hier (Paris)
   backfill:     getArg('backfill') || process.env.BACKFILL || '',  // "YYYY-MM-DD:YYYY-MM-DD" (historique)
+  enrich:       getArg('enrich') || process.env.ENRICH || '',      // "YYYY-MM-DD:YYYY-MM-DD" (salles/Backrooms/B2B sur l'existant)
   headful:      Boolean(getArg('headful')),
   keepOpen:     Boolean(getArg('keep-open')),
   dryRun:       Boolean(getArg('dry-run') || process.env.DRY_RUN === '1'),
@@ -138,6 +142,8 @@ function journalIdx(headers) {
     iCpt: idx('N° Compte général'), iFact: idx('Date de facture'), iDeb: idx('Débit'), iCred: idx('Crédit'),
     iCat: idx('Catégorie de produit'), iSess: idx('Session de jeu'), iProd: idx('Produit'), iQte: idx('Quantité'),
     iTax: idx('Taxes appliquées'), iEvt: idx("Date d'évènement"),
+    // Optionnelles (-1 si absentes) : societe -> part B2B ; n° facture -> regroupement
+    iSoc: idx('Société'), iNum: idx('N° Facture'),
   };
   const missing = Object.entries({ 'N° Compte général': I.iCpt, 'Date de facture': I.iFact, 'Débit': I.iDeb, 'Crédit': I.iCred })
     .filter(([, i]) => i < 0).map(([n]) => n);
@@ -145,18 +151,56 @@ function journalIdx(headers) {
   return I;
 }
 
-// Agrege un sous-ensemble de lignes (= un jour) selon le mode. Logique inchangee.
+// Salle d'une ligne « Room » : « PSYCHIATRIC - 3P - 21:30 » -> « PSYCHIATRIC ».
+// A defaut (pas de session), premier segment du libelle produit.
+function roomOf(sessLabel, prodLabel) {
+  const s = String(sessLabel || '').trim();
+  const m = s.match(/^(.+?)\s+-\s+\d+\s*P\s+-\s+\d{1,2}[:hH]\d{2}\s*$/);
+  if (m) return m[1].trim();
+  if (s) return s.split(/\s+-\s+/)[0].trim();
+  return String(prodLabel || '').split(/\s+-\s+/)[0].trim() || 'Autre';
+}
+// Backrooms (activite arretee) : reconnu dans la salle, le produit, la categorie
+// ou un code de prevente (BRVIP). « BACK TO THE 80'S » ne doit PAS matcher :
+// on exige « room » juste apres « back ».
+const RE_BACKROOMS = /back\s*-?\s*rooms?\b|\bBRVIP/i;
+const isBackrooms = (...labels) => labels.some((l) => RE_BACKROOMS.test(String(l || '')));
+
+// Agrege un sous-ensemble de lignes (= un jour) selon le mode. La logique
+// CA / sessions / joueurs est INCHANGEE (calibree le 21/07/2026) ; s'ajoutent
+// la ventilation par salle, le perimetre Backrooms et la part B2B.
 function aggregateRows(dayRows, I, mode) {
-  const { iCpt, iCat, iProd, iQte, iTax, iDeb, iCred, iSess, iEvt } = I;
+  const { iCpt, iCat, iProd, iQte, iTax, iDeb, iCred, iSess, iEvt, iSoc, iNum } = I;
   let ttc = 0, ht = 0, tva = 0, caSessions = 0, caBonsCadeaux = 0, caProduits = 0, remises = 0, nbBonsCadeaux = 0, nbProduits = 0, joueurs = 0;
   const sess = new Set(); const produits = new Map(); const codes = new Map();
+  // --- salles / Backrooms / B2B ---
+  const rooms = new Map();                                   // salle -> { ca TTC, sess:Set, joueurs }
+  const roomAdd = (nom, montantTTC, sessKey, qte) => {
+    const r = rooms.get(nom) || { ca: 0, sess: new Set(), joueurs: 0 };
+    r.ca += montantTTC; if (sessKey) { r.sess.add(sessKey); r.joueurs += qte; } rooms.set(nom, r);
+  };
+  const br = { ca: 0, remises: 0, sess: new Set(), joueurs: 0, labels: new Set() };
+  const brAdd = (montantTTC, sessKey, qte, label) => {
+    br.ca += montantTTC; if (sessKey) { br.sess.add(sessKey); br.joueurs += qte; }
+    if (label) br.labels.add(String(label).trim().slice(0, 60));
+  };
+  const factTTC = new Map(); const factB2B = new Set();       // mode ventes : par facture (lignes 411)
+  const b2bSess = new Set(); let b2bJoueurs = 0, b2bCaJoue = 0; // mode joue : par ligne Room
+
   for (const r of dayRows) {
     const cpt = String(r[iCpt]).trim();
     const cat = norm(iCat >= 0 ? r[iCat] : '');
-    const prod = norm(iProd >= 0 ? r[iProd] : '');
+    const prodRaw = iProd >= 0 ? String(r[iProd]) : '';
+    const prod = norm(prodRaw);
+    const sessRaw = iSess >= 0 ? String(r[iSess]).trim() : '';
     const qte = iQte >= 0 ? numFR(r[iQte]) : 0;
     const taux = iTax >= 0 ? numFR(r[iTax]) : 0;
     const ttcOf = (montantHT) => montantHT * (1 + taux / 100);
+    const soc = iSoc >= 0 && String(r[iSoc]).trim() !== '';          // commande au nom d'une societe
+    const fact = iNum >= 0 ? String(r[iNum]).trim() : '';
+    const sessKey = sessRaw ? sessRaw + ' | ' + (iEvt >= 0 ? String(r[iEvt]) : '') : '';
+    const bkr = isBackrooms(cat, sessRaw, prodRaw);
+    if (soc && fact) factB2B.add(fact);
 
     // Mode "joue" (base date de prestation) : Room = sessions JOUEES ; Cheque =
     // bon ACHETE ce jour (a ajouter au CA, pas une session).
@@ -167,19 +211,26 @@ function aggregateRows(dayRows, I, mode) {
       if (chq) { caBonsCadeaux += ttcOf(m); nbBonsCadeaux += qte > 0 ? qte : 1; continue; }
       if (cat !== 'room') continue;
       ht += m; ttc += ttcOf(m);
-      if (!prod.includes('garantie') && iSess >= 0 && String(r[iSess]).trim() !== '') {
-        sess.add(String(r[iSess]) + ' | ' + String(r[iEvt])); joueurs += qte;
-      }
+      const garantie = prod.includes('garantie');
+      if (!garantie && sessRaw) { sess.add(sessKey); joueurs += qte; }
+      roomAdd(roomOf(sessRaw, prodRaw), ttcOf(m), garantie ? '' : sessKey, qte);
+      if (bkr) brAdd(ttcOf(m), garantie ? '' : sessKey, qte, sessRaw || prodRaw);
+      if (soc) { b2bCaJoue += ttcOf(m); if (!garantie && sessRaw) { b2bSess.add(sessKey); b2bJoueurs += qte; } }
       continue;
     }
 
-    if (cpt.startsWith('411')) { ttc += numFR(r[iDeb]) - numFR(r[iCred]); continue; }
+    if (cpt.startsWith('411')) {
+      const m = numFR(r[iDeb]) - numFR(r[iCred]); ttc += m;
+      if (fact) factTTC.set(fact, (factTTC.get(fact) || 0) + m);
+      continue;
+    }
     if (cpt.startsWith('445')) { tva += numFR(r[iCred]) - numFR(r[iDeb]); continue; }
     if (cpt.startsWith('709') || cat.includes('vouchers') || cat.includes('remise')) {
       const m = numFR(r[iDeb]) - numFR(r[iCred]); const mttc = ttcOf(m);
       ht -= m; remises += mttc;
-      const label = ((iProd >= 0 ? String(r[iProd]) : '') || 'Code / remise').trim().slice(0, 60);
+      const label = (prodRaw || 'Code / remise').trim().slice(0, 60);
       codes.set(label, (codes.get(label) || 0) + mttc);
+      if (bkr) { br.remises += mttc; br.labels.add(label); }
       continue;
     }
     if (!cpt.startsWith('70')) continue;
@@ -189,26 +240,49 @@ function aggregateRows(dayRows, I, mode) {
     const isCheque = cat.includes('cheque') || cat.includes('carte cadeau') || cat.includes('bon cadeau');
     if (isRoom && !isGarantie) {
       caSessions += ttcOf(m);
-      if (iSess >= 0 && String(r[iSess]).trim() !== '') { sess.add(String(r[iSess]) + ' | ' + (iEvt >= 0 ? String(r[iEvt]) : '')); joueurs += qte; }
+      if (sessRaw) { sess.add(sessKey); joueurs += qte; }
+      roomAdd(roomOf(sessRaw, prodRaw), ttcOf(m), sessKey, qte);
     } else if (isCheque) {
       caBonsCadeaux += ttcOf(m); nbBonsCadeaux += qte > 0 ? qte : 1;
     } else {
       caProduits += ttcOf(m); nbProduits += qte > 0 ? qte : 1;
-      let nom = iProd >= 0 ? String(r[iProd]) : 'produit';
+      let nom = prodRaw || 'produit';
       if (isGarantie) nom = 'Garantie report de session';
       else if (prod.includes('frais de paiement')) nom = 'Frais de paiement partagé';
       else nom = nom.slice(0, 60);
       produits.set(nom, (produits.get(nom) || 0) + (qte > 0 ? qte : 1));
     }
+    if (bkr && !isCheque) brAdd(ttcOf(m), (isRoom && !isGarantie) ? sessKey : '', qte, sessRaw || prodRaw);
   }
   const r2 = (x) => Math.round(x * 100) / 100;
+  // Part B2B (mode ventes) : une facture est B2B des qu'une de ses lignes porte une societe.
+  let caB2B = 0, nbB2B = 0, nbFact = 0;
+  for (const [f, m] of factTTC) { nbFact++; if (factB2B.has(f)) { caB2B += m; nbB2B++; } }
+  const b2b = mode === 'joue'
+    ? { sessions: b2bSess.size, joueurs: Math.round(b2bJoueurs), caJoue: r2(b2bCaJoue) }
+    : { ca: r2(caB2B), n: nbB2B, caB2C: r2(ttc - caB2B), nB2C: nbFact - nbB2B };
   return {
     ttc: r2(ttc), ht: r2(ht), tva: r2(tva), sessions: sess.size, joueurs: Math.round(joueurs),
     caSessions: r2(caSessions), caBonsCadeaux: r2(caBonsCadeaux), caProduits: r2(caProduits), remises: r2(remises),
     nbBonsCadeaux: Math.round(nbBonsCadeaux), nbProduits: Math.round(nbProduits),
     produits: [...produits.entries()].slice(0, 10).map(([n, q]) => `${q}× ${n}`),
     codes: [...codes.entries()].map(([label, montant]) => ({ label, montant: r2(montant) })).sort((a, b) => b.montant - a.montant).slice(0, 20),
+    // Ventilation par salle, compacte : [nom, CA TTC, sessions, joueurs], triee par CA
+    rooms: [...rooms.entries()].map(([n, r]) => [n, r2(r.ca), r.sess.size, Math.round(r.joueurs)]).sort((a, b) => b[1] - a[1]).slice(0, 12),
+    backrooms: { ca: r2(br.ca), remises: r2(br.remises), net: r2(br.ca - br.remises), sessions: br.sess.size, joueurs: Math.round(br.joueurs), labels: [...br.labels].slice(0, 8) },
+    b2b,
   };
+}
+
+// Perimetre Backrooms d'une journee, tel qu'ecrit dans detail.backrooms (le
+// dashboard le retire des comparaisons N-1 et des objectifs) :
+//   ca = ventes TTC Backrooms nettes des codes de prevente (BRVIP) encaissees ce
+//   jour ; sessions / joueurs = Backrooms JOUEES ce jour.
+function backroomsDetail(ventes, joue) {
+  const v = (ventes && ventes.backrooms) || {}, j = (joue && joue.backrooms) || {};
+  const labels = [...new Set([...(v.labels || []), ...(j.labels || [])])].slice(0, 8);
+  return { ca: v.net || 0, brut: v.ca || 0, remises: v.remises || 0, sessionsVendues: v.sessions || 0,
+    sessions: j.sessions || 0, joueurs: j.joueurs || 0, labels };
 }
 
 // Analyse d'un export filtre sur UN jour (dayFR au format DD/MM/YYYY).
@@ -216,7 +290,9 @@ function analyseJournal(filePath, dayFR, mode = 'ventes') {
   const aoa = readExport(filePath).filter((r) => r.some((c) => String(c).trim() !== ''));
   const empty = { headers: [], totalRows: 0, dayRows: 0, otherDates: [], ttc: 0, ht: 0, tva: 0,
     sessions: 0, joueurs: 0, caSessions: 0, caBonsCadeaux: 0, caProduits: 0, remises: 0,
-    nbBonsCadeaux: 0, nbProduits: 0, produits: [], codes: [] };
+    nbBonsCadeaux: 0, nbProduits: 0, produits: [], codes: [], rooms: [],
+    backrooms: { ca: 0, remises: 0, net: 0, sessions: 0, joueurs: 0, labels: [] },
+    b2b: mode === 'joue' ? { sessions: 0, joueurs: 0, caJoue: 0 } : { ca: 0, n: 0, caB2C: 0, nB2C: 0 } };
   if (!aoa.length) return empty;
   const headers = aoa[0].map((h) => String(h).trim());
   const rows = aoa.slice(1);
@@ -610,8 +686,11 @@ async function runBackfill(page, dumpDebug) {
       detail: {
         vendu: { ttcBrut: v.ttc || 0, ht: v.ht || 0, sessions: v.caSessions || 0, chequesUtilises: v.caBonsCadeaux || 0,
           produits: v.caProduits || 0, remises: v.remises || 0, nbSessions: v.sessions || 0, nbJoueurs: v.joueurs || 0,
-          nbProduits: v.nbProduits || 0, listeProduits: v.produits || [], listeCodes: v.codes || [] },
-        joue: { caJoue: j.ttc || 0, sessions: j.sessions || 0, joueurs: j.joueurs || 0, chequesAchetes: j.caBonsCadeaux || 0, nbChequesAchetes: j.nbBonsCadeaux || 0 },
+          nbProduits: v.nbProduits || 0, listeProduits: v.produits || [], listeCodes: v.codes || [],
+          rooms: v.rooms || [], b2b: v.b2b || null },
+        joue: { caJoue: j.ttc || 0, sessions: j.sessions || 0, joueurs: j.joueurs || 0, chequesAchetes: j.caBonsCadeaux || 0, nbChequesAchetes: j.nbBonsCadeaux || 0,
+          rooms: j.rooms || [], b2b: j.b2b || null },
+        backrooms: backroomsDetail(v, j),
         caEncaisse: caOf(date),
       },
       source: 'backfill', ts: Date.now(), syncedAt: new Date().toISOString(),
@@ -622,6 +701,70 @@ async function runBackfill(page, dumpDebug) {
     if (res.ok) written++; else log(`⚠️ ${date} : écriture RTDB ${res.status}`);
   }
   log(`✅ Backfill terminé : ${written} jour(s) écrit(s), ${skipped} déjà présent(s) (non écrasés).`);
+}
+
+// ---------------------------------------------------------------------------
+// 6ter) ENRICHISSEMENT de l'historique : re-telecharge les 2 exports sur une
+//   plage et complete les journees DEJA presentes avec la ventilation par
+//   salle, le perimetre Backrooms et la part B2B — sans toucher ca / sessions /
+//   avis. PATCH sur detail/ uniquement (conforme aux regles RTDB : ecriture
+//   journee par journee). Rejouable sans risque.
+//   Usage : node scrape.mjs --enrich=2025-01-01:2025-12-31 [--dry-run]
+// ---------------------------------------------------------------------------
+async function runEnrich(page, dumpDebug) {
+  const [start, end] = String(CFG.enrich).split(':');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start || '') || !/^\d{4}-\d{2}-\d{2}$/.test(end || '')) {
+    throw new Error('enrich : format attendu --enrich=YYYY-MM-DD:YYYY-MM-DD');
+  }
+  log(`ENRICHISSEMENT ${start} → ${end} (salles / Backrooms / B2B — ca, sessions, avis inchangés)`);
+  const ventesFile = await downloadJournal(page, dumpDebug, 'en-ventes', [
+    { key: 'type', match: 'commandes' }, { key: 'dateBase', match: 'date de commande' }, { key: 'statuts', match: 'uniquement paye' },
+  ], start, end);
+  const joueFile = await downloadJournal(page, dumpDebug, 'en-joue', [
+    { key: 'type', match: 'commandes' }, { key: 'dateBase', match: 'date de prestation' }, { key: 'statuts', match: 'en attente de paiement' },
+  ], start, end);
+  const vMap = analyseAllDays(ventesFile, 'ventes');
+  const jMap = analyseAllDays(joueFile, 'joue');
+  const allDates = [...new Set([...vMap.keys(), ...jMap.keys()])].filter((d) => d >= start && d <= end).sort();
+
+  // --- Rapport de controle (lisible dans les logs du run) -------------------
+  const perMonth = {}; const roomsTot = new Map(); const brLabels = new Set();
+  for (const d of allDates) {
+    const v = vMap.get(d) || {}, j = jMap.get(d) || {}; const mk = d.slice(0, 7);
+    const pm = perMonth[mk] = perMonth[mk] || { ca: 0, b2b: 0, br: 0, brSess: 0 };
+    pm.ca += (v.ttc || 0) - (v.caBonsCadeaux || 0) + (j.caBonsCadeaux || 0);
+    pm.b2b += (v.b2b && v.b2b.ca) || 0; pm.br += (v.backrooms && v.backrooms.net) || 0; pm.brSess += (j.backrooms && j.backrooms.sessions) || 0;
+    for (const r of (j.rooms || [])) { const t = roomsTot.get(r[0]) || { ca: 0, sess: 0 }; t.ca += r[1]; t.sess += r[2]; roomsTot.set(r[0], t); }
+    for (const l of [...((v.backrooms && v.backrooms.labels) || []), ...((j.backrooms && j.backrooms.labels) || [])]) brLabels.add(l);
+  }
+  const salles = [...roomsTot.entries()].sort((a, b) => b[1].ca - a[1].ca).map(([n, t]) => n + ' ' + Math.round(t.ca) + ' € / ' + t.sess + ' sess').join(' · ') || '—';
+  log(allDates.length + ' jour(s) avec données. Salles jouées : ' + salles);
+  log('Libellés reconnus comme Backrooms : ' + ([...brLabels].join(' | ') || 'aucun'));
+  for (const [mk, p] of Object.entries(perMonth).sort()) {
+    log('  ' + mk + ' : CA ' + Math.round(p.ca) + ' € · B2B ' + Math.round(p.b2b) + ' € (' + (p.ca ? Math.round(p.b2b / p.ca * 100) : 0) + ' %) · Backrooms ' + Math.round(p.br) + ' € / ' + p.brSess + ' sess');
+  }
+  if (CFG.dryRun) { log('DRY-RUN : rien écrit.'); return; }
+
+  await ensureAuth();
+  let existing = {};
+  try { const er = await fetch(rtdbUrl('/state/entries.json')); if (er.ok) existing = (await er.json()) || {}; } catch { /* vide */ }
+  const keyOf = new Map(Object.entries(existing).filter(([, e]) => e && e.date).map(([k, e]) => [e.date, k]));
+  let done = 0, absent = 0, ko = 0;
+  for (const date of allDates) {
+    const key = keyOf.get(date);
+    if (!key) { absent++; continue; }                          // journee inconnue : c'est le role du backfill
+    const v = vMap.get(date) || {}, j = jMap.get(date) || {};
+    const patch = {
+      'vendu/rooms': v.rooms || [], 'vendu/b2b': v.b2b || null,
+      'joue/rooms': j.rooms || [], 'joue/b2b': j.b2b || null,
+      backrooms: backroomsDetail(v, j), enrichedAt: new Date().toISOString(),
+    };
+    const res = await fetch(rtdbUrl('/state/entries/' + key + '/detail.json'), {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+    });
+    if (res.ok) done++; else { ko++; if (ko <= 5) log('⚠️ ' + date + ' : PATCH ' + res.status + ' ' + (await res.text()).slice(0, 120)); }
+  }
+  log('✅ Enrichissement : ' + done + ' journée(s) complétée(s), ' + absent + ' absente(s) de la base (un backfill les créerait), ' + ko + ' échec(s).');
 }
 
 // ---------------------------------------------------------------------------
@@ -689,6 +832,8 @@ async function main() {
 
     // --- Mode BACKFILL (historique) : traite toute une plage puis s'arrete ---
     if (CFG.backfill) { await runBackfill(page, dumpDebug); return; }
+    // --- Mode ENRICH : complete l'historique existant (salles / Backrooms / B2B) ---
+    if (CFG.enrich) { await runEnrich(page, dumpDebug); return; }
 
     // --- EXPORT 1 : "ventes" (CA encaisse, base date de commande) -----------
     const ventes = await runExport(page, dumpDebug, 'ventes', [
@@ -727,6 +872,10 @@ async function main() {
     log(`   + cheques cadeaux ACHETES      : +${r2(joue.caBonsCadeaux)} €  (${joue.nbBonsCadeaux})`);
     log(`   ➜ CA ENCAISSE DU JOUR = ${caEncaisse} € TTC`);
     log(`🎮 ACTIVITE JOUEE (date de jeu)   = ${joue.sessions} session(s) jouee(s) · ${joue.joueurs} joueur(s) · CA joue ${joue.ttc} € TTC (cheques exclus)`);
+    log('🏢 B2B (commande au nom d\'une societe) = ' + ventes.b2b.ca + ' € sur ' + ventes.b2b.n + ' facture(s) · B2C ' + ventes.b2b.caB2C + ' € (' + ventes.b2b.nB2C + ')');
+    if (joue.rooms.length) log('🚪 Par salle (joue) : ' + joue.rooms.map((r) => r[0] + ' ' + r[1] + ' € / ' + r[2] + ' sess / ' + r[3] + ' j.').join(' · '));
+    const brD = backroomsDetail(ventes, joue);
+    if (brD.ca || brD.brut || brD.sessions) log('🕳️ Backrooms : ' + brD.ca + ' € nets (' + brD.sessions + ' sess jouees) — libelles : ' + brD.labels.join(' | '));
     log('──────────────────────────────────────────────\n');
 
     if (!coherent) {
@@ -773,11 +922,14 @@ async function main() {
           nbSessions: ventes.sessions, nbJoueurs: ventes.joueurs,
           nbProduits: ventes.nbProduits, listeProduits: ventes.produits,
           listeCodes: ventes.codes,
+          rooms: ventes.rooms, b2b: ventes.b2b,            // [nom, CA TTC, sessions, joueurs] · part B2B
         },
         joue: {
           caJoue: joue.ttc, sessions: joue.sessions, joueurs: joue.joueurs,
           chequesAchetes: joue.caBonsCadeaux, nbChequesAchetes: joue.nbBonsCadeaux,
+          rooms: joue.rooms, b2b: joue.b2b,
         },
+        backrooms: backroomsDetail(ventes, joue),          // perimetre a exclure des comparaisons
         avisGoogle: avisInfo,
         caEncaisse,
       },
@@ -830,4 +982,4 @@ async function main() {
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 if (isMain) main().catch((e) => fail(e.stack || e.message));
 
-export { analyseJournal, readExport, parisYMD, syncSynergiaVentes, pushSynergia };
+export { analyseJournal, readExport, parisYMD, syncSynergiaVentes, pushSynergia, roomOf, isBackrooms, backroomsDetail };

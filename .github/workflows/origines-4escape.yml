@@ -1,0 +1,63 @@
+name: Origines des joueurs (codes postaux) -> Gamedoor
+
+# Export CLIENTS (+ COMMANDES si possible) de 4escape -> comptages par code
+# postal geocodes -> state/autoMeta/analyse/origines (carte du dashboard).
+# Voir sync-4escape/origines.mjs. Lancement manuel ; une fois valide, un cron
+# mensuel pourra etre ajoute ici.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "1 = exporter + analyser mais NE RIEN ecrire dans Firebase (test)"
+        required: false
+        default: '0'
+
+concurrency:
+  group: origines-4escape
+  cancel-in-progress: false
+
+jobs:
+  origines:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: sync-4escape/package-lock.json
+
+      - name: Install deps
+        working-directory: sync-4escape
+        run: npm ci || npm install
+
+      - name: Install Chromium
+        working-directory: sync-4escape
+        run: npx playwright install --with-deps chromium
+
+      - name: Run
+        working-directory: sync-4escape
+        env:
+          FE_BASE:               ${{ secrets.FE_BASE }}
+          FE_USER:               ${{ secrets.FE_USER }}
+          FE_PASS:               ${{ secrets.FE_PASS }}
+          FB_URL:                ${{ secrets.FB_URL }}
+          CUSTOMERS_PATH:        ${{ secrets.CUSTOMERS_PATH }}
+          ORDERS_PATH:           ${{ secrets.ORDERS_PATH }}
+          CUSTOMERS_EXPORT_TYPE: ${{ secrets.CUSTOMERS_EXPORT_TYPE }}
+          DRY_RUN:               ${{ github.event.inputs.dry_run || '0' }}
+          TZ: 'Europe/Paris'
+        run: node origines.mjs
+
+      # Rapport agrege uniquement (en-tetes, comptages) : aucun fichier client.
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: origines-4escape
+          path: sync-4escape/debug/origines-report.json
+          if-no-files-found: ignore
+          retention-days: 7

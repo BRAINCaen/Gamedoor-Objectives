@@ -43,6 +43,47 @@ avec une **clé fixe par jour** (`auto-2026-07-20`) : si le robot repasse, il
 
 ---
 
+## 🧭 Depuis le 16/10/2026 : salles, Backrooms, B2B, origines des joueurs
+
+Le robot nocturne lit **les mêmes deux exports** et écrit en plus, dans `detail` de
+chaque journée (sans toucher `ca` / `sessions` / `avis`) :
+
+| Champ | Contenu | Usage dans le dashboard |
+|---|---|---|
+| `detail.vendu.rooms` / `detail.joue.rooms` | ventilation par **salle** `[nom, CA TTC, sessions, joueurs]` (salle lue dans « Session de jeu », ex. `PSYCHIATRIC - 3P - 21:30`) | détail de la dernière synchro |
+| `detail.vendu.b2b` | **part B2B** : `{ca, n, caB2C, nB2C}` — une facture est B2B dès qu'une de ses lignes porte une **Société** (TTC des lignes 411) | bloc « Répartition B2B / B2C » sous « Les chiffres » |
+| `detail.backrooms` | **périmètre Backrooms** (activité arrêtée) : `{ca (net des codes BRVIP), brut, remises, sessions, joueurs, labels}` — reconnu par `/back\s*-?\s*rooms?\b|BRVIP/i` dans la salle, le produit, la catégorie ou le code (« BACK TO THE 80'S » ne matche pas) | retiré des comparaisons N-1, des records, de l'analyse par période et des objectifs automatiques (option « hors Backrooms » dans Réglages, cochée par défaut) |
+
+### Compléter l'historique (une fois) — mode `enrich`
+Les journées déjà en base n'ont pas ces champs. **Actions → « Synchro 4escape → Gamedoor »
+→ Run workflow** avec `enrich` = `2025-01-01:2025-12-31`, puis `2026-01-01:2026-10-15`
+(et les années antérieures si tu veux la part B2B sur toute la profondeur). Le run
+re-télécharge les deux exports sur la plage et fait un `PATCH` de `detail/` jour par
+jour (conforme aux règles Firebase). Les logs affichent par mois : CA, B2B (%),
+Backrooms (€ / sessions) et la liste des libellés reconnus comme Backrooms — **vérifie
+cette liste** : si un produit de prévente Backrooms porte un autre nom, élargis
+`RE_BACKROOMS` dans `scrape.mjs`. `dry_run` = 1 pour voir le rapport sans écrire.
+En local : `node scrape.mjs --enrich=2025-01-01:2025-12-31 --dry-run`.
+
+### Origines des joueurs — `origines.mjs` (carte du dashboard)
+Workflow **« Origines des joueurs (codes postaux) → Gamedoor »** (manuel). Il exporte la
+liste **Clients** de 4escape (`/admin/customers`, colonne code postal détectée par son
+en-tête), joint si possible les **Commandes** (`/admin/orders`, export « entêtes de
+commande ») par e-mail pour compter commandes / joueurs / CA par code postal et par
+année, géocode chaque code postal via `geo.api.gouv.fr` (gratuit, cache dans
+`autoMeta/analyse/geo`) et écrit `state/autoMeta/analyse/origines`. **Aucune donnée
+nominative n'est écrite** : des comptages par code postal uniquement. Si l'export
+clients n'a pas de colonne code postal, le run échoue en listant les colonnes vues ;
+régler alors les secrets `CUSTOMERS_PATH` / `CUSTOMERS_EXPORT_TYPE`. Le robot
+`explore.mjs` (workflow « Inventaire 4escape ») liste écrans, boutons et colonnes
+d'export sans rien télécharger de nominatif, pour trouver le bon écran.
+
+> Ces agrégats vivent sous `state/autoMeta/analyse` parce que les règles Firebase
+> actuelles n'autorisent aucune autre branche sous `/state` sans republication des
+> règles (voir `SECURITE-FIREBASE.md`).
+
+---
+
 ## 🔧 Installation (une seule fois)
 
 ### 1. Créer un compte 4escape dédié au robot (recommandé)
