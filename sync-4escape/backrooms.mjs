@@ -227,7 +227,9 @@ async function main() {
       if (!CFG.roomMatch.test(room + ' ' + prod)) continue;
       lignesBR++; if (/refunded/.test(st)) refunded++;
       const isRoomLine = !!room;
-      if (dC) { const b = byCmd[dC] = byCmd[dC] || { ca: 0, refs: new Set(), joueurs: 0, labels: new Set(), pro: 0 }; b.ca = r2(b.ca + ttc); b.labels.add((room || prod).slice(0, 60)); if (isRoomLine) { b.refs.add(String(r[c.ref])); b.joueurs += qte; } if (c.soc >= 0 && /oui/i.test(String(r[c.soc]))) b.pro++; }
+      // Libellés : uniquement des NOMS DE SALLE. Les lignes hors salle (prévente, code
+      // de prévente) portent des noms de personnes dans leur produit : jamais repris.
+      if (dC) { const b = byCmd[dC] = byCmd[dC] || { ca: 0, refs: new Set(), joueurs: 0, labels: new Set(), pro: 0 }; b.ca = r2(b.ca + ttc); b.labels.add(room ? room.slice(0, 60) : 'Prévente / code Backrooms'); if (isRoomLine) { b.refs.add(String(r[c.ref])); b.joueurs += qte; } if (c.soc >= 0 && /oui/i.test(String(r[c.soc]))) b.pro++; }
       if (dE && isRoomLine) { const e = byEvt[dE] = byEvt[dE] || { refs: new Set(), joueurs: 0, ca: 0 }; e.refs.add(String(r[c.ref])); e.joueurs += qte; e.ca = r2(e.ca + ttc); }
     }
     log(`Salles vues dans les commandes : ${[...rooms.entries()].sort((a, b) => b[1].ttc - a[1].ttc).map(([n, t]) => `${n} (${t.n} lignes, ${Math.round(t.ttc)} €)`).join(' · ')}`);
@@ -275,7 +277,8 @@ async function main() {
       const res = await fetch(rtdb(`/state/entries/${key}/detail/backrooms.json`), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(detail) });
       if (res.ok) done++; else { ko++; if (ko <= 5) log(`⚠️ ${d} : PUT ${res.status} ${(await res.text()).slice(0, 120)}`); }
     }
-    const resume = { majLe: new Date().toISOString(), salle: [...new Set(jours.flatMap((d) => [...byCmd[d].labels]))].slice(0, 4), motif: String(CFG.roomMatch), dansJournal, total: totalBR, periode: [jours[0], jours[jours.length - 1]], parMois, salles: rapport.salles.slice(0, 40) };
+    const sallesBR = [...rooms.keys()].filter((n) => CFG.roomMatch.test(n));
+    const resume = { majLe: new Date().toISOString(), salle: sallesBR.slice(0, 4), motif: String(CFG.roomMatch), dansJournal, total: totalBR, periode: [jours[0], jours[jours.length - 1]], parMois, salles: rapport.salles.slice(0, 40) };
     const w = await fetch(rtdb('/state/autoMeta/analyse/backrooms.json'), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(resume) });
     log(`✅ ${done} journée(s) écrite(s), ${absent} absente(s) de la base, ${ko} échec(s) · résumé ${w.ok ? 'écrit' : 'NON écrit (' + w.status + ')'} dans autoMeta/analyse/backrooms.`);
   } catch (e) {
