@@ -1,0 +1,64 @@
+name: Backrooms (salle masquee) -> Gamedoor
+
+# Retrouve les ventes de la salle masquee « PERDUS DANS LES BACKROOMS » via
+# l'export Commandes de 4escape et les ecrit dans detail/backrooms des journees
+# concernees (+ resume mensuel). Voir sync-4escape/backrooms.mjs. Manuel.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "1 = exporter + analyser mais NE RIEN ecrire dans Firebase (test)"
+        required: false
+        default: '0'
+      room_match:
+        description: "Motif (regex, insensible a la casse) de la salle a isoler"
+        required: false
+        default: 'back\s*-?\s*rooms?'
+
+concurrency:
+  group: backrooms-4escape
+  cancel-in-progress: false
+
+jobs:
+  backrooms:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: sync-4escape/package-lock.json
+
+      - name: Install deps
+        working-directory: sync-4escape
+        run: npm ci || npm install
+
+      - name: Install Chromium
+        working-directory: sync-4escape
+        run: npx playwright install --with-deps chromium
+
+      - name: Run
+        working-directory: sync-4escape
+        env:
+          FE_BASE:    ${{ secrets.FE_BASE }}
+          FE_USER:    ${{ secrets.FE_USER }}
+          FE_PASS:    ${{ secrets.FE_PASS }}
+          FB_URL:     ${{ secrets.FB_URL }}
+          ROOM_MATCH: ${{ github.event.inputs.room_match }}
+          DRY_RUN:    ${{ github.event.inputs.dry_run || '0' }}
+          TZ: 'Europe/Paris'
+        run: node backrooms.mjs
+
+      # Rapport agrege uniquement (montants par mois, noms de salles) : aucun client.
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backrooms-4escape
+          path: sync-4escape/debug/backrooms-report.json
+          if-no-files-found: ignore
+          retention-days: 7

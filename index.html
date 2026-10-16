@@ -786,11 +786,14 @@ function hb(){return state.config.horsBackrooms!==false;}
 /* Seules des VENTES Backrooms (CA net positif) sont retirées : un jour où seul un
    code de prévente BRVIP a été utilisé en paiement (CA net négatif) reste tel quel,
    le code étant déjà déduit du CA comme n'importe quelle remise. */
-function brCa(b){if(!b||!((b.brut||0)>0))return 0;return Math.max(0,b.ca||0);}   // brut = ventes Backrooms réelles (hors codes)
+/* dansJournal === false : ventes retrouvées via l'export Commandes (salle masquée) mais
+   ABSENTES du journal qui alimente le CA affiché -> rien à retirer, elles n'y sont pas. */
+function brIn(b){return !!b&&b.dansJournal!==false;}
+function brCa(b){if(!b||!brIn(b)||!((b.brut||0)>0))return 0;return Math.max(0,b.ca||0);}   // brut = ventes Backrooms réelles (hors codes)
 function caOf(e){const b=hb()?brOf(e):null;return (e.ca||0)-brCa(b);}
-function sessOf(e){const b=hb()?brOf(e):null;return (e.sessions||0)-(b?(b.sessions||0):0);}
-function jouOf(e){const b=hb()?brOf(e):null;return (e.players||0)-(b?(b.joueurs||0):0);}
-function brSum(es){let ca=0,s=0,j=0,n=0;for(const e of es){const b=brOf(e);if(b&&(brCa(b)>0||b.sessions)){ca+=brCa(b);s+=b.sessions||0;j+=b.joueurs||0;n++;}}return {ca,sessions:s,joueurs:j,days:n};}
+function sessOf(e){const b=hb()?brOf(e):null;return (e.sessions||0)-(brIn(b)?(b.sessions||0):0);}
+function jouOf(e){const b=hb()?brOf(e):null;return (e.players||0)-(brIn(b)?(b.joueurs||0):0);}
+function brSum(es){let ca=0,s=0,j=0,n=0;for(const e of es){const b=brOf(e);if(b&&brIn(b)&&(brCa(b)>0||b.sessions)){ca+=brCa(b);s+=b.sessions||0;j+=b.joueurs||0;n++;}}return {ca,sessions:s,joueurs:j,days:n};}
 /* Part B2B : montants TTC facturés aux commandes passées au nom d'une société (detail.vendu.b2b) */
 function b2bSum(es){let ca=0,caB2C=0,n=0,nB2C=0,days=0;for(const e of es){const b=e.detail&&e.detail.vendu&&e.detail.vendu.b2b;if(!b)continue;days++;ca+=b.ca||0;caB2C+=b.caB2C||0;n+=b.n||0;nB2C+=b.nB2C||0;}return {ca,caB2C,n,nB2C,days};}
 function avatarOf(name){const r=state.roster.find(x=>x.name===name);return r?r.avatar:'🎮';}
@@ -1216,6 +1219,20 @@ function drawGeoMap(pts,unit){
 /* ---- Backrooms : résumé dans les réglages (ce qui est retiré, et l'effet sur les objectifs) ---- */
 function renderBrInfo(){
   const el=document.getElementById('brInfo'); if(!el)return;
+  // Résumé écrit par le robot backrooms.mjs (export Commandes, salle masquée) : prioritaire
+  const R=state.analyse&&state.analyse.backrooms;
+  if(R&&R.parMois){
+    const mois=Object.keys(R.parMois).sort();
+    const tot=mois.reduce((a,m)=>a+(R.parMois[m].ca||0),0), sess=mois.reduce((a,m)=>a+(R.parMois[m].sessions||0),0), jou=mois.reduce((a,m)=>a+(R.parMois[m].joueurs||0),0);
+    const MN=['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
+    const lig=mois.map(m=>'<span style="display:inline-block;margin:0 10px 2px 0">'+MN[parseInt(m.slice(5,7),10)-1]+' '+m.slice(0,4)+' : <b>'+fmt(R.parMois[m].ca)+' €</b> · '+(R.parMois[m].sessions||0)+' sess</span>').join('');
+    const maj=R.majLe?new Date(R.majLe).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}):'';
+    const explication=R.dansJournal
+      ?'<span style="color:var(--green)">✔ Ces ventes sont dans le journal 4escape, donc dans le CA affiché : '+(hb()?'elles sont retirées des comparaisons N-1, des records, de l\'analyse par période et des objectifs automatiques.':'<span style="color:var(--gold)">⚠ incluses pour l\'instant (option décochée).</span>')+'</span>'
+      :'<span style="color:var(--gold)">ℹ Ces ventes n\'apparaissent PAS dans le journal 4escape qui alimente ce tableau de bord (salle masquée) : le CA affiché, les comparaisons et les objectifs calculés depuis les données sont donc déjà hors Backrooms. Rien n\'est retiré.</span>';
+    el.innerHTML='🕳️ <b>'+esc((R.salle||[]).join(', ')||'Backrooms')+'</b> — retrouvée dans l\'export Commandes de 4escape'+(maj?' (relevé du '+maj+')':'')+' : <b>'+fmt(tot)+' € TTC</b> · '+sess+' sessions jouées · '+jou+' joueurs'+(R.periode?' · du '+R.periode[0]+' au '+R.periode[1]:'')+'<br>'+lig+'<br>'+explication;
+    return;
+  }
   const enriched=state.entries.filter(e=>e.detail&&e.detail.backrooms).length;
   if(!enriched){el.innerHTML='Aucune journée ne porte encore le détail Backrooms. Lance l\'enrichissement de l\'historique (GitHub → Actions → « Synchro 4escape → Gamedoor » → Run workflow → <b>enrich = 2025-01-01:2025-12-31</b>, puis la même chose pour 2026) : les comparaisons N-1 et les objectifs retireront alors leur chiffre d\'affaires.';return;}
   const byYear={}; let days=0, vouchers=0, vouchersEur=0;

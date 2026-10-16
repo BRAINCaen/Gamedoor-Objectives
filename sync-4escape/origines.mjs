@@ -217,34 +217,39 @@ async function main() {
     // --- 1) Clients -> code postal ------------------------------------------
     const cli = await exporter(page, CFG.customersPath, CFG.customersType, 'clients');
     const H = cli.headers;
-    const iMail = findCol(H, /^e-?mail$/, /mail/);
-    const iCP = findCol(H, /code ?postal/, /^cp$/, /postal/, /zip/);
-    const iVille = findCol(H, /^ville$/, /ville|city|commune/);
+    // L'export 4escape porte DEUX jeux d'adresses : « User Address … » (le particulier)
+    // et « Company Address … » (la société). Par ligne, on prend la première colonne
+    // renseignée dans l'ordre particulier -> société ; idem pour les e-mails.
+    const cols = (...res) => { const out = []; for (const re of res) H.forEach((h, i) => { if (re.test(norm(h)) && !out.includes(i)) out.push(i); }); return out; };
+    const iCPs = cols(/user.*postal|particulier.*postal/, /code ?postal|postal|zip|^cp$/);
+    const iMails = cols(/user.*mail|contact.*mail/, /mail/);
     const iPays = findCol(H, /^pays$/, /pays|country/);
-    const iSoc = findCol(H, /^societe$/, /societe|entreprise|company/);
-    rapport.etapes.push({ etape: 'clients', lignes: cli.rows.length, colonnes: H, colonneCP: iCP >= 0 ? H[iCP] : null, colonneEmail: iMail >= 0 ? H[iMail] : null });
-    if (iCP < 0) throw new Error(`Export clients : aucune colonne de code postal reconnue. Colonnes : ${H.join(' ; ')}\n` +
+    const iIsCo = findCol(H, /^is company$/, /est societe|is company/);
+    const firstVal = (r, idx) => { for (const i of idx) { const v = String(r[i] ?? '').trim(); if (v) return v; } return ''; };
+    rapport.etapes.push({ etape: 'clients', lignes: cli.rows.length, colonnes: H, colonnesCP: iCPs.map((i) => H[i]), colonnesEmail: iMails.map((i) => H[i]) });
+    if (!iCPs.length) throw new Error(`Export clients : aucune colonne de code postal reconnue. Colonnes : ${H.join(' ; ')}\n` +
       `➜ Si le code postal est ailleurs (autre type d'export, autre écran), renseigne CUSTOMERS_EXPORT_TYPE / CUSTOMERS_PATH.`);
+    log(`Colonnes code postal : ${iCPs.map((i) => H[i]).join(' > ')} · e-mail : ${iMails.map((i) => H[i]).join(' > ')}`);
 
     const cpOf = (v) => { const s = String(v || '').replace(/\s/g, '').toUpperCase(); return /^\d{5}$/.test(s) ? s : (s ? 'ETR' : ''); };
     const safeKey = (s) => s.replace(/[.#$\[\]\/]/g, '_');
     const parCP = {}; const etranger = {};
     const bucket = (cp, pays) => {
-      if (cp === 'ETR') { const k = safeKey((pays || 'Pays inconnu').trim().slice(0, 40)) || 'Pays inconnu'; return etranger[k] = etranger[k] || { clients: 0, commandes: 0, joueurs: 0, ca: 0 }; }
-      return parCP[cp] = parCP[cp] || { clients: 0, commandes: 0, joueurs: 0, ca: 0, parAnnee: {} };
+      if (cp === 'ETR') { const k = safeKey((pays || 'Pays inconnu').trim().slice(0, 40)) || 'Pays inconnu'; return etranger[k] = etranger[k] || { clients: 0, clientsPro: 0, commandes: 0, joueurs: 0, ca: 0 }; }
+      return parCP[cp] = parCP[cp] || { clients: 0, clientsPro: 0, commandes: 0, joueurs: 0, ca: 0, parAnnee: {} };
     };
-    const mailToCP = new Map(); let avecCP = 0;
+    const mailToCP = new Map(); let avecCP = 0, pros = 0;
     for (const r of cli.rows) {
-      const cp = cpOf(r[iCP]); if (!cp) continue;
+      const cp = cpOf(firstVal(r, iCPs)); if (!cp) continue;
       avecCP++;
       const pays = iPays >= 0 ? String(r[iPays]).trim() : '';
       // Un pays étranger renseigné avec un CP à 5 chiffres (ex. Belgique 1000x) -> étranger
       const isFR = !pays || /^(fr|france|fra)$/i.test(pays);
-      const b = bucket(isFR ? cp : 'ETR', pays); b.clients++;
-      const mail = iMail >= 0 ? norm(r[iMail]) : '';
-      if (mail) mailToCP.set(mail, isFR ? cp : ['ETR', pays]);
+      const isCo = iIsCo >= 0 && /^(oui|yes|true|1)$/i.test(String(r[iIsCo]).trim());
+      const b = bucket(isFR ? cp : 'ETR', pays); b.clients++; if (isCo) { b.clientsPro++; pros++; }
+      for (const i of iMails) { const m = norm(r[i]); if (m) mailToCP.set(m, isFR ? cp : ['ETR', pays]); }
     }
-    log(`Clients : ${cli.rows.length} · avec code postal : ${avecCP} · codes postaux distincts : ${Object.keys(parCP).length} · étranger : ${Object.keys(etranger).length} pays`);
+    log(`Clients : ${cli.rows.length} · avec code postal : ${avecCP} (dont ${pros} sociétés) · codes postaux distincts : ${Object.keys(parCP).length} · étranger : ${Object.keys(etranger).length} pays`);
 
     // --- 2) Commandes (facultatif) -> joueurs / CA par code postal et par année ---
     let commandes = null;
@@ -294,7 +299,7 @@ async function main() {
     log(`Géocodage : ${Object.keys(cache).length - avant} nouveau(x) code(s) postal(aux) résolu(s), ${introuvables} introuvable(s) (ignorés sur la carte).`);
     for (const cp of Object.keys(parCP)) if (parCP[cp].lat == null) delete parCP[cp];
 
-    const totaux = Object.values(parCP).reduce((t, b) => ({ clients: t.clients + b.clients, commandes: t.commandes + b.commandes, joueurs: t.joueurs + b.joueurs, ca: r2(t.ca + b.ca) }), { clients: 0, commandes: 0, joueurs: 0, ca: 0 });
+    const totaux = Object.values(parCP).reduce((t, b) => ({ clients: t.clients + b.clients, clientsPro: t.clientsPro + (b.clientsPro || 0), commandes: t.commandes + b.commandes, joueurs: t.joueurs + b.joueurs, ca: r2(t.ca + b.ca) }), { clients: 0, clientsPro: 0, commandes: 0, joueurs: 0, ca: 0 });
     const annees = [...new Set(Object.values(parCP).flatMap((b) => Object.keys(b.parAnnee || {})))].sort();
     const origines = {
       majLe: new Date().toISOString(),
