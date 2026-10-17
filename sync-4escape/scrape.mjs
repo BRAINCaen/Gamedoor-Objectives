@@ -537,16 +537,40 @@ async function saveSynMeta(meta) {
 
 // Etape SYNERGIA : credite la cagnotte pour les paliers CA franchis ce mois +
 // les nouveaux avis. Retourne un resume pour le log. N'echoue jamais le run.
+// Paliers EFFECTIFS du mois, lus dans state/config du dashboard (meme logique que
+// effTargets() d'index.html : montants fixes, ou calcul par saisonnalite si autoOn).
+// Avant le 17/10/2026 les seuils etaient codes en dur (27/30/33 k) : ils suivent
+// desormais les objectifs reels affiches a l'equipe. SEUIL_* (env) reste prioritaire.
+async function seuilsDuMois(month) {
+  try {
+    await ensureAuth();
+    const r = await fetch(rtdbUrl('/state/config.json'));
+    if (!r.ok) return null;
+    const C = (await r.json()) || {};
+    const mi = parseInt(String(month).slice(5, 7), 10) - 1;
+    if (C.autoOn && C.refCA) {
+      const season = Array.isArray(C.season) && C.season.length === 12 ? C.season : null;
+      const w = season ? (season[mi] || 1 / 12) : 1 / 12;
+      const mk = (g) => Math.round(C.refCA * (1 + (g || 0) / 100) * w);
+      return { bronze: mk(C.gBronze), argent: mk(C.gArgent), or: mk(C.gOr), source: 'config (automatique)' };
+    }
+    if (C.targetBronze && C.targetArgent && C.targetOr) return { bronze: C.targetBronze, argent: C.targetArgent, or: C.targetOr, source: 'config (fixes)' };
+  } catch { /* config indisponible -> valeurs par defaut */ }
+  return null;
+}
+
 async function pushSynergia({ month, caMonth, nouveauxAvis }) {
   if (!SYN.key) { log('ℹ️  SYNERGIA : clé XP absente (SYN_XP_KEY) → étape sautée (rien n\'est envoyé).'); return; }
   const meta = await synMeta();
   meta.paliers = meta.paliers || {};
   meta.paliers[month] = meta.paliers[month] || {};
+  const cfgSeuils = await seuilsDuMois(month);
+  log(`🎯 Paliers du mois ${month} : ${cfgSeuils ? `${cfgSeuils.bronze} / ${cfgSeuils.argent} / ${cfgSeuils.or} € (${cfgSeuils.source})` : 'valeurs par défaut du robot'} · CA du mois ${Math.round(caMonth)} €`);
   let changed = false;
 
   // Paliers CA (une seule fois par mois, quand le cumul les franchit)
   for (const p of PALIERS) {
-    const seuil = Number(process.env['SEUIL_' + p.id.toUpperCase()]) || p.def;
+    const seuil = Number(process.env['SEUIL_' + p.id.toUpperCase()]) || (cfgSeuils && cfgSeuils[p.id]) || p.def;
     if (caMonth >= seuil && !meta.paliers[month][p.id]) {
       const res = await synPostXp({ target: 'teamPool', amount: p.xp, reason: `Palier ${p.label} atteint (${seuil} €)`, source: 'gamedoor_objectives' });
       if (res.ok) { meta.paliers[month][p.id] = { xp: p.xp, at: new Date().toISOString() }; changed = true;

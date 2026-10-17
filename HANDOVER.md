@@ -32,6 +32,7 @@
 - Premier run nocturne avec le robot modifié : **succès** (00h43 Paris, puis créneaux sautés par l'anti-doublon).
 - **B2B / B2C** : flèches **‹ ›** (`b2bShift`, `B2B_OFFSET`, même mécanique que « Les chiffres » via `shiftAnchor` / `computePeriods`), lien « ⟲ revenir à maintenant », flèches désactivées aux bornes et sur « Tout ».
 - **Carte** : zone de survol élargie (`L.canvas({tolerance:8})`), bulle qui s'allume au survol, infobulle « sticky » qui suit la souris, rayon minimal 2,5 px.
+- **Objectifs 2026 ramenés hors Backrooms** (demande de Polar) : paliers mensuels fixes **26 000 / 28 900 / 31 800 / 34 700 €** (avant : 27 000 / 30 000 / 33 000 / 36 000), soit × 0,9639 = 329 607 / 341 957 (2025 hors Backrooms / 2025 brut), écrits directement dans `state/config` (note `objectifsNote`). Mode automatique laissé désactivé. Le robot lit désormais les paliers XP Synergia dans `state/config` (`seuilsDuMois`, fixes ou automatiques) au lieu de 27/30/33 k codés en dur.
 
 ---
 
