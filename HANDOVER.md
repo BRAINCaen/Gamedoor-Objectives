@@ -1,7 +1,7 @@
 # HANDOVER — Dashboard GAMEDOOR °41 (« La moula » dans Synergia)
 
 > Document de passation pour qu'un futur Claude reprenne la session sans poser de questions au user.
-> **Dernière mise à jour : 2026-10-16** (session « La moula » : carte des origines, répartition B2B / B2C à la date de l'évènement, périmètre hors Backrooms, robots `origines.mjs` et `backrooms.mjs`, enrichissement de tout l'historique 2020 → 2026).
+> **Dernière mise à jour : 2026-10-17** (17/10 : flèches ‹ › sur B2B / B2C, survol facilité sur la carte ; 16/10 : session « La moula » : carte des origines, répartition B2B / B2C à la date de l'évènement, périmètre hors Backrooms, robots `origines.mjs` et `backrooms.mjs`, enrichissement de tout l'historique 2020 → 2026).
 
 ---
 
@@ -27,6 +27,11 @@
 6. **Origines** : robot **`origines.mjs`** (export Clients + export Commandes « entêtes », jointure par e-mail en mémoire, géocodage `geo.api.gouv.fr` avec cache `autoMeta/analyse/geo`, écriture `autoMeta/analyse/origines`, **aucune donnée nominative**). Premier relevé : 741 clients (seule l'adresse société était lue) → corrigé : l'export porte **`User Address Postal Code`** (particuliers) ET **`Company Address Postal Code`** → **17 932 clients sur 25 426 (70 %), 1 647 codes postaux, 17 781 commandes** ; Caen & agglo 48 %, reste Calvados 20 %, reste Normandie 15 %, IdF 7 %, reste France 9 %, étranger 1 %. Cron le **1er du mois**.
 7. **B2B à la date de l'évènement** (demande de Polar) : la part était d'abord calculée sur le journal « date de commande ». Désormais `detail.joue.b2b` = factures 411 du journal **« date de prestation »** (payé + en attente), une facture est B2B dès qu'une ligne porte une **Société** ; `detail.vendu.b2b` (date de commande) conservé pour info. Historique 2020 → 2026 ré-enrichi (2 159 journées sur 2 217 ; les 58 autres n'ont aucun évènement). 2026 au 15/10 : **8 %** (20 137 € / 245 464 €) vs 5 % en 2025 ; 2025 de 2 % (été) à 20 % (nov.-déc.) ; depuis 2020 : 11 %.
 8. **Hygiène** : une première écriture Backrooms avait repris des libellés de codes de prévente contenant des noms → corrigé (libellés = noms de salle uniquement) et réécrit.
+
+### 17/10/2026 — retouches
+- Premier run nocturne avec le robot modifié : **succès** (00h43 Paris, puis créneaux sautés par l'anti-doublon).
+- **B2B / B2C** : flèches **‹ ›** (`b2bShift`, `B2B_OFFSET`, même mécanique que « Les chiffres » via `shiftAnchor` / `computePeriods`), lien « ⟲ revenir à maintenant », flèches désactivées aux bornes et sur « Tout ».
+- **Carte** : zone de survol élargie (`L.canvas({tolerance:8})`), bulle qui s'allume au survol, infobulle « sticky » qui suit la souris, rayon minimal 2,5 px.
 
 ---
 
