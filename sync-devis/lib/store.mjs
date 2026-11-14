@@ -1,11 +1,12 @@
 // Couche d'écriture Supabase de la synchro. Règles :
 //  · idempotente : n'écrit d'historique que pour les devis nouveaux/changés ;
 //  · préserve le travail manuel (notes libres, satisfaction, salles, services) ;
-//  · remplace le bloc de note auto au lieu de l'empiler (marqueurs ⟦4escape⟧).
+//  · remplace le bloc de note auto au lieu de l'empiler (marqueurs ⟦Hub⟧, ou ⟦4escape⟧ avant le 02/11/2026) ;
+//  · n'efface jamais une donnée connue d'un devis par un champ vide de la source (téléphone, date de validation…).
 
 import { createClient } from '@supabase/supabase-js';
 import { normSociete, iso } from './csv.mjs';
-import { STATUTS_HONORES, STATUT_CRM } from './transform.mjs';
+import { STATUTS_HONORES, STATUTS_FIGES, STATUT_CRM, LIBELLE_STATUT } from './transform.mjs';
 import { scoreValeur, scorePotentiel } from './score.mjs';
 import { scoreFinal } from './engagement.mjs';
 
@@ -13,19 +14,24 @@ const CHUNK = 500;
 const chunk = (arr, n) => { const o = []; for (let i = 0; i < arr.length; i += n) o.push(arr.slice(i, i + n)); return o; };
 const estPaye = (statut) => STATUTS_HONORES.has(statut);
 
-const MARK_OPEN = '⟦4escape⟧', MARK_CLOSE = '⟦/4escape⟧';
-const RE_BLOC = /⟦4escape⟧[\s\S]*?⟦\/4escape⟧/;
-function remplacerBloc(notes, bloc) {
-  const b = `${MARK_OPEN}\n${bloc}\n${MARK_CLOSE}`;
-  if (notes && RE_BLOC.test(notes)) return notes.replace(RE_BLOC, b);
+// Source des devis : 'hub' (depuis le 02/11/2026) ou '4escape' (avant). Le bloc auto porte le nom de la source ; un
+// ancien bloc ⟦4escape⟧ est REMPLACÉ par le bloc ⟦Hub⟧ (jamais deux blocs sur une même fiche).
+export const SOURCES = {
+  hub: { marque: 'Hub', robot: 'Synchro Hub', action: 'Devis Hub' },
+  '4escape': { marque: '4escape', robot: 'Synchro 4escape', action: 'Devis 4escape' },
+};
+const RE_BLOC = /⟦(4escape|Hub)⟧[\s\S]*?⟦\/\1⟧/;
+export function remplacerBloc(notes, bloc, marque = 'Hub') {
+  const b = `⟦${marque}⟧\n${bloc}\n⟦/${marque}⟧`;
+  if (notes && RE_BLOC.test(notes)) return notes.replace(RE_BLOC, () => b);
   return notes ? `${notes.trim()}\n\n${b}` : b;
 }
-function noteAuto(e) {
-  const L = [`— 4escape : ${e.devis.length} devis`];
+function noteAuto(e, marque) {
+  const L = [`— ${marque} : ${e.devis.length} devis`];
   if (e.ca) L.push(`CA réalisé : ${Math.round(e.ca).toLocaleString('fr-FR')} € sur ${e.nbHonores} honoré(s)`);
   if (e.dernierHonore) L.push(`Dernière venue : ${e.dernierHonore.toLocaleDateString('fr-FR')}`);
   if (e.prochainEvent) L.push(`Prochaine date : ${e.prochainEvent.toLocaleDateString('fr-FR')}`);
-  if (e.aEncours) L.push(`${e.devis.filter((d) => !['completed','refunded','cancelled','failed'].includes(d.statut)).length} devis en cours`);
+  if (e.aEncours) L.push(`${e.devis.filter((d) => !STATUTS_FIGES.has(d.statut)).length} devis en cours`);
   if (e.priva) L.push('A déjà privatisé');
   if (e.repas) L.push('A déjà pris une prestation repas');
   if (e.noms.size > 1) L.push(`Regroupe : ${[...e.noms].join(' / ')}`);
@@ -37,11 +43,23 @@ function statutCRM(e) {
   const st = e.devis.map((d) => d.statut);
   if (st.some((s) => STATUTS_HONORES.has(s))) return 'Client';
   if (st.includes('on-hold')) return 'Devis envoyé';
-  if (st.includes('pending')) return 'Relance';
+  if (st.includes('pending') || st.includes('expired')) return 'Relance';
   return 'Perdu';
 }
 
-export function makeStore() {
+// Colonnes de `devis` qu'une source peut laisser vides alors qu'on les connaît déjà (ex. le téléphone des devis de 4escape,
+// que le Hub n'a pas repris) : la valeur connue est gardée. Statuts, montants et cases à cocher ne sont jamais concernés.
+const GARDER_SI_VIDE = ['societe', 'client_nom', 'contact_email', 'contact_tel', 'nb_joueurs', 'date_validation', 'date_evenement',
+  'date_creation', 'due_date', 'recall_date', 'date_cloture', 'produits', 'contact_interne', 'source'];
+const vide = (v) => v === null || v === undefined || v === '';
+export function garderConnu(row, ex) {
+  if (!ex) return row;
+  for (const k of GARDER_SI_VIDE) if (vide(row[k]) && !vide(ex[k])) row[k] = ex[k];
+  return row;
+}
+
+export function makeStore({ source = 'hub' } = {}) {
+  const S = SOURCES[source] || SOURCES.hub;
   const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_SERVICE_KEY;
   if (!url || !key) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_KEY manquants');
   const sb = createClient(url, key, { auth: { persistSession: false } });
@@ -60,7 +78,8 @@ export function makeStore() {
   };
 
   async function chargerDevis() {
-    const rows = await fetchAll('devis', 'reference,statut,premier_vu_le,statut_precedent,statut_change_le,paye_le');
+    // Toutes les colonnes : garderConnu() et le contrôle de continuité du dry-run (sync.mjs) en ont besoin.
+    const rows = await fetchAll('devis', '*');
     return new Map(rows.map((r) => [r.reference, r]));
   }
 
@@ -97,7 +116,7 @@ export function makeStore() {
         row.premier_vu_le = ex.premier_vu_le; row.statut_precedent = ex.statut_precedent;
         row.statut_change_le = ex.statut_change_le; row.paye_le = ex.paye_le;
       }
-      return row;
+      return garderConnu(row, ex);
     });
     for (const c of chunk(lignes, CHUNK)) {
       const { error } = await sb.from('devis').upsert(c, { onConflict: 'reference' });
@@ -146,7 +165,7 @@ export function makeStore() {
       const base = scorePotentiel(e, seuils, now);
       const statut = statutCRM(e);
       const ex = proExist.get(e.key);
-      const notes = remplacerBloc(ex ? ex.notes : '', noteAuto(e));
+      const notes = remplacerBloc(ex ? ex.notes : '', noteAuto(e, S.marque), S.marque);
 
       const fiche = {
         statut, notes,
@@ -192,9 +211,9 @@ export function makeStore() {
       const ex = existants.get(d.reference);
       acts.push({
         prospect_id: pid, prospect_nom: d.societe || d.client_nom,
-        user_email: 'robot@gamedoor41', user_name: 'Synchro 4escape',
-        action_type: 'Devis 4escape',
-        description: `${d.reference} — ${d.montant_ttc.toFixed(2)} € — ${STATUT_CRM[d.statut] || d.statut}`
+        user_email: 'robot@gamedoor41', user_name: S.robot,
+        action_type: S.action,
+        description: `${d.reference} — ${d.montant_ttc.toFixed(2)} € — ${LIBELLE_STATUT[d.statut] || STATUT_CRM[d.statut] || d.statut}`
           + (d.reste_du > 0 ? ` (reste dû ${d.reste_du.toFixed(2)} €)` : ''),
         ancien_statut: estChange && ex ? (STATUT_CRM[ex.statut] || ex.statut) : null,
         nouveau_statut: STATUT_CRM[d.statut] || null,

@@ -1,13 +1,13 @@
-# Synchro des DEVIS 4escape -> CRM Supabase.
-# ⚠️ EMPLACEMENT dans le dépôt : .github/workflows/sync-crm-devis.yml
-#    (le dossier sync-devis/ va, lui, à la racine du dépôt Gamedoor-Objectives)
+# Synchro des DEVIS -> CRM Supabase (crmprocaen.netlify.app).
+# Source : le Hub GAMEDOOR·41 depuis la bascule du 02/11/2026 (pont signé /api/pont/crm-devis,
+# voir docs/pont-crm-devis.md du dépôt GAMEDOOR-HUB) ; 4escape avant (input « source »).
 #
 # Secrets requis (Settings → Secrets and variables → Actions) :
-#   FE_BASE, FE_USER, FE_PASS        (déjà présents pour sync-4escape)
-#   SUPABASE_URL, SUPABASE_SERVICE_KEY   (à AJOUTER — la clé service_role)
-#   QUOTES_PATH                       (optionnel, défaut /admin/statistics/quotes)
+#   HUB_PONT_CRM_CLE_PRIVEE             clé privée Ed25519 du robot (le Hub n'a que la clé publique)
+#   SUPABASE_URL, SUPABASE_SERVICE_KEY  base du CRM
+#   FE_USER, FE_PASS (+ FE_BASE, QUOTES_PATH)   seulement pour source=4escape
 
-name: Synchro devis 4escape -> CRM
+name: Synchro devis Hub -> CRM
 
 on:
   workflow_dispatch:
@@ -16,6 +16,10 @@ on:
         description: "1 = analyser sans rien écrire (test)"
         required: false
         default: '0'
+      source:
+        description: "hub (défaut) ou 4escape (ancienne source)"
+        required: false
+        default: 'hub'
   repository_dispatch:
     types: [sync-devis]          # déclenché par le bouton du CRM (via Netlify)
   schedule:
@@ -29,6 +33,8 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     timeout-minutes: 12
+    env:
+      SYNC_DEVIS_SOURCE: ${{ github.event.inputs.source || 'hub' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -39,14 +45,22 @@ jobs:
       - name: Install deps
         working-directory: sync-devis
         run: npm install
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
 
-      - name: Install Chromium
+      - name: Tests hors ligne
+        working-directory: sync-devis
+        run: node tests/test-hub.mjs
+
+      - name: Install Chromium (source 4escape seulement)
+        if: env.SYNC_DEVIS_SOURCE == '4escape'
         working-directory: sync-devis
         run: npx playwright install --with-deps chromium
 
       - name: Run sync
         working-directory: sync-devis
         env:
+          HUB_PONT_CRM_CLE_PRIVEE: ${{ secrets.HUB_PONT_CRM_CLE_PRIVEE }}
           FE_BASE:              ${{ secrets.FE_BASE }}
           FE_USER:              ${{ secrets.FE_USER }}
           FE_PASS:              ${{ secrets.FE_PASS }}
@@ -57,7 +71,7 @@ jobs:
         run: node sync.mjs ${{ github.event.inputs.dry_run == '1' && '--dry-run' || '' }}
 
       - name: Upload debug on failure
-        if: always()
+        if: failure() && env.SYNC_DEVIS_SOURCE == '4escape'
         uses: actions/upload-artifact@v4
         with:
           name: debug-sync-devis

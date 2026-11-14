@@ -8,7 +8,9 @@ const RE_PRIVA = /privatisation/i;
 const RE_REPAS = /restauration|traiteur|viennoiserie|boisson|cocktail|ap[ée]ritif|repas/i;
 
 // statuts qui NE bougeront plus (inutile de re-vérifier / réécrire l'historique)
-export const STATUTS_FIGES = new Set(['completed', 'refunded', 'cancelled', 'failed']);
+// 'expired' : devis du Hub dont la validité est passée sans réponse (depuis le 02/11/2026). S'il est
+// prolongé dans le Hub, la synchro suivante le voit repasser en 'pending'.
+export const STATUTS_FIGES = new Set(['completed', 'refunded', 'cancelled', 'failed', 'expired']);
 // statuts qui comptent comme « honoré » (CA réalisé)
 export const STATUTS_HONORES = new Set(['completed', 'refunded']);
 
@@ -17,10 +19,14 @@ export const STATUT_CRM = {
   completed: 'Client', refunded: 'Client',
   'on-hold': 'Devis envoyé', pending: 'Relance',
   cancelled: 'Perdu', failed: 'Perdu',
+  expired: 'Relance', // sans réponse : à relancer, comme un devis 4escape resté « pending »
 };
 
+// Libellé de l'historique du CRM quand il diffère du statut CRM.
+export const LIBELLE_STATUT = { expired: 'Expiré sans réponse' };
+
 // Corrections ponctuelles de fiches 4escape mal saisies (repris du CRM)
-const OVERRIDES = {
+export const OVERRIDES = {
   '2026-D0097': { societe: 'LA POSTE', est_societe: true },
 };
 
