@@ -66,9 +66,14 @@ async function lireDevis() {
 //    (ex. société ou téléphone d'un devis de 4escape que le Hub n'a pas repris) :
 //    sans ça, une même entreprise pourrait changer de fiche à la bascule.
 // --------------------------------------------------------------------------
+// Un devis de 4escape que 4escape a vu PAYÉ ne redescend jamais en « à payer / en attente » : à la bascule, le Hub a repris
+// comme « à payer » des commandes réglées dans 4escape (les faux impayés « avant le Hub », classés hors suivi dans le Hub,
+// statut inchangé). Annulé ou remboursé passent, eux (un vrai changement). Les devis du Hub (HD-…) font foi tels quels.
+const PAYES = new Set(['completed', 'refunded']);
+const REDESCENTES = new Set(['on-hold', 'pending', 'expired']);
 async function reprendreConnu(devis, existants) {
   const { garderConnu } = await import('./lib/store.mjs');
-  let repris = 0;
+  let repris = 0; const payesGardes = [];
   for (const d of devis) {
     const ex = existants.get(d.reference);
     if (!ex) continue;
@@ -76,9 +81,10 @@ async function reprendreConnu(devis, existants) {
     const sansSociete = !d.societe;
     garderConnu(d, ex);
     if (sansSociete && d.societe) { d.est_societe = d.est_societe || !!ex.est_societe; d._key = normSociete(d.societe || d.client_nom || d.reference); }
+    if (SOURCE === 'hub' && /^\d{4}-D/.test(d.reference) && PAYES.has(ex.statut) && REDESCENTES.has(d.statut)) { payesGardes.push(`${d.reference} (${d.statut})`); d.statut = ex.statut; }
     if (JSON.stringify(d) !== avant) repris++;
   }
-  return repris;
+  return { repris, payesGardes };
 }
 
 // --------------------------------------------------------------------------
@@ -137,6 +143,7 @@ function rapport(devis, entreprises, plan, seuils, extra) {
     if (inc.length) log(`⚠️  Statuts inconnus   : ${inc.map(([k, v]) => `${k} ×${v}`).join(', ')}`);
   }
   if (extra.repris) log(`Infos reprises de Supabase (vides dans la source) : ${extra.repris} devis`);
+  if (extra.payesGardes && extra.payesGardes.length) log(`Payés dans 4escape, gardés payés (le Hub les voit encore à régler) : ${extra.payesGardes.length} — ${extra.payesGardes.join(', ')}`);
   log('\nRépartition des statuts :');
   Object.entries(parStatut).sort((a, b) => b[1] - a[1])
     .forEach(([k, v]) => log(`   ${String(v).padStart(4)}  ${k} → ${STATUT_CRM[k] || '?'}`));
@@ -155,9 +162,10 @@ function rapport(devis, entreprises, plan, seuils, extra) {
     plan.changes.forEach(({ d, ancien }) => { const k = `${ancien} → ${d.statut}`; parPassage[k] = (parPassage[k] || 0) + 1; });
     log(`   changements par type : ${Object.entries(parPassage).map(([k, v]) => `${k} ×${v}`).join(' · ')}`);
     log('   détail des changements :');
-    plan.changes.slice(0, 15).forEach(({ d, ancien }) =>
+    const MAX = 120;
+    plan.changes.slice(0, MAX).forEach(({ d, ancien }) =>
       log(`      ${d.reference}  ${ancien} → ${d.statut}  (${d.est_societe ? d.societe : 'particulier'})`));
-    if (plan.changes.length > 15) log(`      … +${plan.changes.length - 15}`);
+    if (plan.changes.length > MAX) log(`      … +${plan.changes.length - MAX}`);
   }
   if (extra.continuite) {
     const c = extra.continuite;
@@ -206,11 +214,11 @@ function rapport(devis, entreprises, plan, seuils, extra) {
   if (store) { existants = await store.chargerDevis(); log(`État Supabase : ${existants.size} devis déjà connus.`); }
   else log('(pas de connexion Supabase : diff calculé comme si la base était vide)');
 
-  const repris = await reprendreConnu(devis, existants);
+  const { repris, payesGardes } = await reprendreConnu(devis, existants);
   const entreprises = grouperParEntreprise(devis);
   const seuils = calcSeuils(entreprises);
   const plan = diff(devis, existants);
-  rapport(devis, entreprises, plan, seuils, { ignores, repris, continuite: existants.size ? continuite(devis, existants) : null });
+  rapport(devis, entreprises, plan, seuils, { ignores, repris, payesGardes, continuite: existants.size ? continuite(devis, existants) : null });
 
   if (DRY) { log('\n🧪 DRY-RUN : rien n’a été écrit.'); return; }
   if (!store) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_KEY manquants — impossible d’écrire.');
