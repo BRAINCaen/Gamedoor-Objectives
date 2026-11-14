@@ -33,8 +33,9 @@ Tests hors ligne : `node tests/test-hub.mjs` (lancés aussi par le workflow avan
 Bouton « Synchroniser » (CRM)
    → /api/sync (fonction Netlify, détient le token GitHub)
       → repository_dispatch → GitHub Actions (dépôt Gamedoor-Objectives)
-         → Playwright : login 4escape → export des 2 CSV (résumé + détail)
-            → sync.mjs : diff + upsert Supabase + scores
+         → sync.mjs : requête signée au pont du Hub (lib/hub.mjs)
+            → diff + upsert Supabase + scores
+              (ancienne source : Playwright, login 4escape, export des 2 CSV)
                → écrit un rapport dans la table sync_runs
    ← le CRM lit sync_runs et affiche l'avancement, puis recharge
 ```
@@ -80,7 +81,9 @@ Bouton « Synchroniser » (CRM)
    `SUPABASE_SERVICE_KEY` (les `FE_*` y sont déjà).
 6. **Bouton du CRM** : créer un PAT GitHub (fine-grained, dépôt Gamedoor-Objectives,
    *Contents: Read and write*) et l'ajouter sur Netlify en variable
-   `GITHUB_DISPATCH_TOKEN`, puis redéployer le CRM.
+   `GITHUB_DISPATCH_TOKEN`, puis redéployer le CRM. (Au 14/11/2026 : pas encore fait,
+   `/api/sync` répond « GITHUB_DISPATCH_TOKEN non configuré » ; la synchro de la nuit,
+   elle, tourne.)
 
 ## Modes de `sync.mjs`
 
