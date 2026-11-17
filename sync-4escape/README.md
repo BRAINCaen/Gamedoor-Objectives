@@ -1,3 +1,14 @@
+# ⛔ ARRÊTÉ le 17/11/2026
+
+Décision d'Allan : le tableau « La course aux objectifs » est dans le Hub GAMEDOOR·41 (menu « Objectifs », https://synergia-hub.netlify.app/objectifs), calculé sur les données du Hub. Ce dépôt n'alimente plus rien côté objectifs :
+
+- robots 4escape supprimés (sync-4escape.yml, origines-4escape.yml, backrooms-4escape.yml) : 4escape est fermé depuis le 02/11/2026 et le robot affichait un CA faux (947 € pour novembre) ; plus aucun XP de palier versé à Synergia (décision d'Allan : pas d'XP par palier de CA) ;
+- index.html (GitHub Pages) = simple redirection vers le Hub ; l'ancien tableau reste dans l'historique git (commit 2c67d22 et avant) ;
+- la base Firebase gamedoor-objectives n'est plus écrite (archive) ;
+- **toujours actifs** : Synchro devis Hub → CRM (sync-crm-devis.yml, dossier sync-devis/) et Confirmer un compte CRM (confirmer-compte.yml).
+
+---
+
 # 🤖 Synchro 4escape → Gamedoor °41
 
 Robot qui, **chaque nuit**, télécharge sur 4escape **deux exports du Journal des
