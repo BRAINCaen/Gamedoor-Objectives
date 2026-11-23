@@ -29,10 +29,14 @@ const reponse = { ok: true, nombre: 6, devis: [
   { reference: 'HD-2026-0002', type: 'devis', statut: 'en_attente_confirmation', etat: 'en_cours', societe: 'BETA', est_societe: true, client_telephone: '0601020304', cree_par: 'Polar', source_vente: 'offer', montant_ttc: 250, cree_le: '2026-11-05T09:00:00.000Z' },
   { reference: 'HD-2026-0003', type: 'commande', reference_commande: 'H-2026-0040', statut: 'en_attente_paiement', etat: 'gagne', client_nom: 'Marie Martin', est_societe: false, montant_ttc: 120 },
   { reference: 'HD-2026-0003', type: 'commande', statut: 'payee', etat: 'gagne' }, // doublon : ignoré
+  { reference: 'HD-2026-0090', type: 'devis', statut: 'annulee', etat: 'perdu', societe: 'TEST HUB SARL', est_societe: true, montant_ttc: 10 },
+  { reference: 'HD-2026-0091', type: 'devis', statut: 'en_attente_confirmation', etat: 'en_cours', societe: '', client_nom: 'test hub', montant_ttc: 10 },
+  { reference: 'HD-2026-0092', type: 'devis', statut: 'en_attente_confirmation', etat: 'en_cours', societe: 'TESTA HUBERT SAS', est_societe: true, montant_ttc: 300 },
 ] };
 const { devis, ignores } = transformHub(reponse);
 const par = Object.fromEntries(devis.map((d) => [d.reference, d]));
-verif(devis.length === 4 && ignores.remplaces === 1 && !par['2026-D0110'], '4 devis gardés, le devis repris dans le Hub écarté, le doublon ignoré');
+verif(devis.length === 5 && ignores.remplaces === 1 && !par['2026-D0110'], '5 devis gardés, le devis repris dans le Hub écarté, le doublon ignoré');
+verif(ignores.essais === 2 && !par['HD-2026-0090'] && !par['HD-2026-0091'] && par['HD-2026-0092'], 'devis d\'essai « TEST HUB » écartés (société ou nom), une vraie société au nom voisin gardée');
 verif(par['2026-D0097'].societe === 'LA POSTE' && par['2026-D0097'].privatisation === true, 'correction ponctuelle 2026-D0097 (LA POSTE) toujours appliquée, privatisation vue');
 const d1 = par['2026-D0101'];
 verif(d1.annee === 2026 && d1.type_ref === 'D' && d1.numero === 101 && d1.statut === 'expired', 'référence 4escape découpée, statut expired');

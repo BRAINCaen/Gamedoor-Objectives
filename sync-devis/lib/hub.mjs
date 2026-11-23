@@ -14,6 +14,10 @@ import { OVERRIDES } from './transform.mjs';
 const RE_PRIVA = /privatisation/i;
 const RE_REPAS = /restauration|traiteur|viennoiserie|boisson|cocktail|ap[ée]ritif|repas/i;
 
+// Devis d'essai faits dans le Hub (société « TEST HUB… », ex. HD-2026-0001/0002 du 14/11/2026) : jamais dans le CRM.
+export const RE_ESSAI = /^\s*TEST\s+HUB\b/i;
+export const estEssai = (x) => RE_ESSAI.test(String(x.societe || '')) || RE_ESSAI.test(String(x.client_nom || ''));
+
 // Statut brut du Hub -> vocabulaire de la synchro (celui de 4escape, que le Hub reprend un pour un depuis son import).
 // Ainsi un devis de 4escape garde dans le CRM exactement le statut qu'il avait : la bascule ne crée aucun faux changement.
 const STATUT_HUB = {
@@ -54,12 +58,13 @@ function decouperReference(ref, creeLe) {
 
 /** Réponse du pont -> { devis, ignores } ; `devis` a la forme de transform() (même colonnes que la table Supabase `devis`). */
 export function transformHub(reponse) {
-  const devis = [], ignores = { remplaces: 0, sans_suite: 0, inconnus: {} };
+  const devis = [], ignores = { remplaces: 0, sans_suite: 0, essais: 0, inconnus: {} };
   const vus = new Set();
   for (const x of (reponse && reponse.devis) || []) {
     const ref = String(x.reference || '').trim();
     if (!ref || vus.has(ref)) continue;
     vus.add(ref);
+    if (estEssai(x)) { ignores.essais++; continue; }
     const statut = statutSynchro(x);
     if (!statut) { if (x.etat === 'sans_suite') ignores.sans_suite++; else ignores.remplaces++; continue; }
     if (statut.startsWith('hub:')) ignores.inconnus[statut] = (ignores.inconnus[statut] || 0) + 1;

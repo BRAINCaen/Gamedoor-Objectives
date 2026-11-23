@@ -1,0 +1,41 @@
+# OUTIL PONCTUEL (23/11/2026) : retire du CRM les devis d'essai « TEST HUB » (voir sync-devis/purge-essais.mjs).
+# À SUPPRIMER après usage.
+name: Purge des devis d'essai (ponctuel)
+
+on:
+  workflow_dispatch:
+    inputs:
+      appliquer:
+        description: "1 = supprimer pour de bon (sinon lecture seule)"
+        required: false
+        default: '0'
+
+concurrency:
+  group: sync-crm-devis
+  cancel-in-progress: false
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install deps
+        working-directory: sync-devis
+        run: npm install
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      - name: Purge
+        working-directory: sync-devis
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          if [ "${{ github.event.inputs.appliquer }}" = "1" ]; then
+            node purge-essais.mjs --appliquer
+          else
+            node purge-essais.mjs
+          fi

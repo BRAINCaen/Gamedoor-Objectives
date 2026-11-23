@@ -139,7 +139,7 @@ function rapport(devis, entreprises, plan, seuils, extra) {
   log(`Devis figés          : ${devis.length - enCours}`);
   if (extra.ignores) {
     const inc = Object.entries(extra.ignores.inconnus || {});
-    log(`Écartés              : ${extra.ignores.remplaces} repris dans le Hub (suivis sous leur nouvelle référence), ${extra.ignores.sans_suite} sans suite (facture directe)`);
+    log(`Écartés              : ${extra.ignores.remplaces} repris dans le Hub (suivis sous leur nouvelle référence), ${extra.ignores.sans_suite} sans suite (facture directe), ${extra.ignores.essais || 0} devis d'essai (TEST HUB)`);
     if (inc.length) log(`⚠️  Statuts inconnus   : ${inc.map(([k, v]) => `${k} ×${v}`).join(', ')}`);
   }
   if (extra.repris) log(`Infos reprises de Supabase (vides dans la source) : ${extra.repris} devis`);
