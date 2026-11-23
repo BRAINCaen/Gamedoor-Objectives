@@ -9,6 +9,7 @@ import { normSociete, iso } from './csv.mjs';
 import { STATUTS_HONORES, STATUTS_FIGES, STATUT_CRM, LIBELLE_STATUT } from './transform.mjs';
 import { scoreValeur, scorePotentiel } from './score.mjs';
 import { scoreFinal } from './engagement.mjs';
+import { planQuestionnaires, idsDejaNotes, ACTION as ACTION_QUESTIONNAIRE } from './questionnaires.mjs';
 
 const CHUNK = 500;
 const chunk = (arr, n) => { const o = []; for (let i = 0; i < arr.length; i += n) o.push(arr.slice(i, i + n)); return o; };
@@ -241,5 +242,29 @@ export function makeStore({ source = 'hub', sb: sbFourni = null, parallele = 8 }
     return res;
   }
 
-  return { chargerDevis, appliquer, debutRun, finRun };
+  // 5) QUESTIONNAIRES ENTREPRISES (Hub, 23/11/2026) — bloc ⟦Questionnaire⟧ de la dernière réponse + une entrée d'historique par
+  // réponse (une seule fois). Lu APRÈS appliquer() : les notes relues portent déjà le bloc ⟦Hub⟧ du jour. ecrire=false : aperçu.
+  async function questionnaires(liste, { ecrire = true } = {}) {
+    const prospects = await fetchAll('prospects', 'id,societe,notes');
+    const deja = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await sb.from('activities').select('description').eq('action_type', ACTION_QUESTIONNAIRE).range(from, from + 999);
+      if (error) throw new Error(`activities (questionnaires) : ${error.message}`);
+      deja.push(...(data || [])); if (!data || data.length < 1000) break;
+    }
+    const plan = planQuestionnaires(liste, { prospects, dejaNotes: idsDejaNotes(deja) });
+    const res = { recus: (liste || []).length, rattaches: plan.rattaches, non_rattaches: plan.non_rattaches, nouvelles: plan.activites.length, fiches: plan.notes.length, ecrit: false };
+    if (!ecrire) return res;
+    await enParallele(plan.notes, parallele, async (x) => {
+      const { error } = await sb.from('prospects').update({ notes: x.notes }).eq('id', x.id);
+      if (error) throw new Error(`prospects (questionnaire) : ${error.message}`);
+    });
+    for (const c of chunk(plan.activites, 200)) {
+      const { error } = await sb.from('activities').insert(c);
+      if (error) throw new Error(`activities (questionnaire) : ${error.message}`);
+    }
+    return { ...res, ecrit: true };
+  }
+
+  return { chargerDevis, appliquer, debutRun, finRun, questionnaires };
 }

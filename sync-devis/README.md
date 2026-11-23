@@ -25,6 +25,13 @@ donc diff, scores, notes et historique sont inchangés :
 - le bloc de note auto devient `⟦Hub⟧…⟦/Hub⟧` (il remplace l'ancien `⟦4escape⟧`),
   l'historique est signé « Synchro Hub » / « Devis Hub ».
 
+**Questionnaires entreprises (depuis le 23/11/2026)** : le Hub envoie le questionnaire Google le lendemain de la venue
+d'une entreprise ; les réponses reviennent dans le Hub puis arrivent ici par le même pont (champ `questionnaires`, sans les
+essais de l'équipe). `lib/questionnaires.mjs` : pour chaque entreprise retrouvée (même nom normalisé que ses devis), un bloc
+de note `⟦Questionnaire⟧…⟦/Questionnaire⟧` = sa dernière réponse (satisfaction, recommandation, envie de revenir, ce qu'on a
+le droit de publier et où), et une entrée d'historique « Questionnaire » par réponse, une seule fois (`[q_…]`). Réponse sans
+fiche : signalée dans le rapport. Une erreur sur les questionnaires ne fait jamais échouer les devis.
+
 Tests hors ligne : `node tests/test-hub.mjs` (lancés aussi par le workflow avant chaque synchro).
 
 ## Comment ça marche

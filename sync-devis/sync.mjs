@@ -45,7 +45,9 @@ async function lireDevis() {
     else { log('Lecture des devis dans le Hub (pont signé)…'); reponse = await fetchHub(); }
     log(`Hub : ${reponse.nombre ?? (reponse.devis || []).length} devis lus (réponse du ${reponse.genere_le || '?'})`);
     const { devis, ignores } = transformHub(reponse);
-    return { devis, ignores };
+    // Réponses au questionnaire entreprises (23/11/2026), jointes par le pont ; null = Hub plus ancien ou lecture en échec côté Hub.
+    const questionnaires = Array.isArray(reponse.questionnaires) ? reponse.questionnaires : null;
+    return { devis, ignores, questionnaires };
   }
   const i = ARGS.indexOf('--from-files');
   let csv;
@@ -198,7 +200,7 @@ function rapport(devis, entreprises, plan, seuils, extra) {
 // Main
 // --------------------------------------------------------------------------
 (async () => {
-  const { devis, ignores } = await lireDevis();
+  const { devis, ignores, questionnaires } = await lireDevis();
   if (!devis.length) throw new Error(`Aucun devis lu (source ${NOM_SOURCE}) — vérifie la source.`);
 
   // charge l'état connu de Supabase (sauf test pur sans identifiants)
@@ -220,7 +222,12 @@ function rapport(devis, entreprises, plan, seuils, extra) {
   const plan = diff(devis, existants);
   rapport(devis, entreprises, plan, seuils, { ignores, repris, payesGardes, continuite: existants.size ? continuite(devis, existants) : null });
 
-  if (DRY) { log('\n🧪 DRY-RUN : rien n’a été écrit.'); return; }
+  const logQuestionnaires = (q) => log(`Questionnaires entreprises : ${q.recus} reçu(s) du Hub · ${q.rattaches} rattaché(s) à une fiche · ${q.nouvelles} nouvelle(s) réponse(s) à l’historique · ${q.fiches} bloc(s) de notes ${q.ecrit ? 'mis à jour' : 'à mettre à jour'}${q.non_rattaches.length ? ` · ${q.non_rattaches.length} sans fiche : ${q.non_rattaches.slice(0, 10).join(', ')}` : ''}`);
+  if (questionnaires === null && SOURCE === 'hub') log('Questionnaires entreprises : non fournis par le Hub (pont plus ancien ou lecture en échec).');
+  if (DRY) {
+    if (questionnaires && store) { try { logQuestionnaires(await store.questionnaires(questionnaires, { ecrire: false })); } catch (e) { log(`⚠️  Questionnaires : ${e.message}`); } }
+    log('\n🧪 DRY-RUN : rien n’a été écrit.'); return;
+  }
   if (!store) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_KEY manquants — impossible d’écrire.');
 
   const enCours = devis.filter((d) => !STATUTS_FIGES.has(d.statut)).length;
@@ -232,6 +239,11 @@ function rapport(devis, entreprises, plan, seuils, extra) {
   log('\n✍️  Écriture dans Supabase…');
   try {
     const res = await store.appliquer({ devis, entreprises, plan, seuils, now });
+    // Questionnaires : après les fiches (notes relues avec le bloc ⟦Hub⟧ du jour) ; une erreur ici ne fait pas échouer les devis.
+    if (questionnaires) {
+      try { res.questionnaires = await store.questionnaires(questionnaires); logQuestionnaires(res.questionnaires); }
+      catch (e) { res.questionnaires = { erreur: e.message }; log(`⚠️  Questionnaires non écrits : ${e.message}`); }
+    }
     const rapportJSON = {
       origine: SOURCE,
       lus: devis.length, entreprises: entreprises.length, enCours,

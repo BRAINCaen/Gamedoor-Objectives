@@ -4,6 +4,7 @@ import { generateKeyPairSync, verify } from 'node:crypto';
 import { transformHub, statutSynchro, fetchHub } from '../lib/hub.mjs';
 import { remplacerBloc, garderConnu, makeStore, enParallele } from '../lib/store.mjs';
 import { calcSeuils } from '../lib/score.mjs';
+import { blocQuestionnaire, remplacerBlocQuestionnaire, planQuestionnaires, idsDejaNotes, descriptionActivite } from '../lib/questionnaires.mjs';
 import { grouperParEntreprise, STATUTS_FIGES, STATUT_CRM } from '../lib/transform.mjs';
 
 let ok = 0, ko = 0;
@@ -84,7 +85,10 @@ function fauxSupabase(base) {
   const ops = []; let enVol = 0, maxEnVol = 0;
   const attente = (cle) => new Promise((r) => setTimeout(r, (String(cle).length * 7) % 13)); // ordre d'arrivée brassé
   const from = (table) => ({
-    select: () => ({ range: async (a, b) => ({ data: (base[table] || []).slice(a, b + 1), error: null }) }),
+    select: () => ({
+      range: async (a, b) => ({ data: (base[table] || []).slice(a, b + 1), error: null }),
+      eq: (col, val) => ({ range: async (a, b) => ({ data: (base[table] || []).filter((x) => x[col] === val).slice(a, b + 1), error: null }) }),
+    }),
     upsert: async (rows) => { ops.push(['upsert', table, rows]); return { error: null }; },
     update: (patch) => ({ eq: async (_k, id) => {
       enVol++; maxEnVol = Math.max(maxEnVol, enVol); await attente(id); enVol--;
@@ -122,5 +126,38 @@ const actsUn = JSON.parse(un.canon.find((o) => o.includes('"activities"')) || '[
 verif(actsUn.length > 0 && actsUn.every((a) => a.prospect_id), 'chaque entrée d\'historique reste rattachée à sa fiche (identifiant connu après les écritures parallèles)');
 let vus = []; await enParallele([1, 2, 3, 4, 5], 3, async (x) => { vus.push(x); });
 verif(vus.sort().join() === '1,2,3,4,5', 'enParallele traite chaque élément une fois et une seule');
+
+// --- Questionnaires entreprises (Hub, 23/11/2026) → fiche entreprise ---
+const Q1 = { id: 'q_00000000000000a1', recu_le: '2026-11-24T10:02:10.000Z', entreprise: 'ACME Normandie', societe_hub: 'ACME NORMANDIE SAS', referent: 'Camille Robert', fonction: 'RH', date_evenement: '2026-11-23', participants: 14,
+  notes: { globale: 5, accueil: 4 }, nps: 9, revenir: 'Oui, dans les 6 prochains mois', objectif: 'Cohésion d\'équipe', objectif_atteint: 'En partie', autorisations: { nom: ['Site web', 'LinkedIn'], logo: ['LinkedIn'], temoignage: [], photos: ['Instagram', 'LinkedIn'] },
+  signature: 'Nom de l\'entreprise', preferences: { valider_photos: true }, compte_reseaux: '@acme_normandie', nouveautes: 'Non merci', marque: 'Le quiz', ameliorer: 'Plus de place', anecdote: '' };
+const Q2 = { ...Q1, id: 'q_00000000000000a2', recu_le: '2026-12-10T09:00:00.000Z', date_evenement: '2026-12-09', nps: 10, autorisations: {} };
+const QX = { ...Q1, id: 'q_00000000000000b1', entreprise: 'Inconnue SARL', societe_hub: null };
+const bq = blocQuestionnaire(Q1);
+verif(bq.startsWith('⟦Questionnaire⟧\n📋 Questionnaire du 24/11/2026 · venue du 23/11/2026 · 14 participants · Camille Robert (RH)') && bq.endsWith('⟦/Questionnaire⟧'), 'bloc questionnaire : date, venue, participants, référent');
+verif(bq.includes('Satisfaction 5/5 · recommande 9/10 · revenir : Oui, dans les 6 prochains mois') && bq.includes('✅ Autorise : citer le nom (Site web, LinkedIn) · logo (LinkedIn) · photos / vidéos (Instagram, LinkedIn)') && !bq.includes('témoignage ('), 'bloc : notes, recommandation, autorisations canal par canal (témoignage non autorisé absent)');
+verif(bq.includes('valider les photos avant publication') && bq.includes('à taguer : @acme_normandie') && bq.includes('Marqué : « Le quiz »') && !bq.includes('Anecdote'), 'bloc : préférences, compte à taguer, verbatims (vides omis)');
+verif(blocQuestionnaire(Q2).includes('⛔ Aucune autorisation de communication') && !blocQuestionnaire(Q2).includes('témoignage signé'), 'aucune autorisation : dit clairement, signature du témoignage omise');
+const notesFiche = 'Note manuelle : rappeler en janvier\n\n⟦Hub⟧\n— Hub : 2 devis\n⟦/Hub⟧';
+const nq1 = remplacerBlocQuestionnaire(notesFiche, bq);
+verif(nq1.startsWith(notesFiche) && nq1.endsWith(bq) && remplacerBlocQuestionnaire(nq1, bq) === nq1, 'bloc ajouté à la fin, notes manuelles et bloc ⟦Hub⟧ intacts, rejouer ne change rien');
+const nq2 = remplacerBlocQuestionnaire(nq1, blocQuestionnaire(Q2));
+verif((nq2.match(/⟦Questionnaire⟧/g) || []).length === 1 && nq2.includes('venue du 09/12/2026') && remplacerBloc(nq2, '⟦Hub⟧\n— Hub : 3 devis\n⟦/Hub⟧').includes('venue du 09/12/2026'), 'nouvelle réponse : bloc remplacé (jamais empilé) ; la synchro des devis ne touche pas au bloc questionnaire');
+const fiches = [{ id: 'p1', societe: 'ACME Normandie SAS', notes: notesFiche }, { id: 'p2', societe: 'Autre' }];
+const pq = planQuestionnaires([Q2, Q1, QX], { prospects: fiches });
+verif(pq.rattaches === 2 && pq.non_rattaches.join() === 'Inconnue SARL' && pq.activites.length === 2 && pq.activites.every((a) => a.prospect_id === 'p1' && a.action_type === 'questionnaire'), 'rattachement par la société du Hub (forme juridique ignorée), réponse sans fiche signalée');
+verif(pq.notes.length === 1 && pq.notes[0].notes.includes('venue du 09/12/2026') && !pq.notes[0].notes.includes('venue du 23/11/2026'), 'le bloc de la fiche = la DERNIÈRE réponse');
+verif(pq.activites[0].description === descriptionActivite(Q1) && /\[q_00000000000000a1\]$/.test(pq.activites[0].description) && pq.activites[0].created_at === Q1.recu_le, 'historique daté de la réponse, identifiant entre crochets');
+const pq2 = planQuestionnaires([Q2, Q1], { prospects: [{ ...fiches[0], notes: pq.notes[0].notes }], dejaNotes: idsDejaNotes(pq.activites) });
+verif(pq2.activites.length === 0 && pq2.notes.length === 0 && pq2.deja === 2, 'synchro suivante : aucune entrée en double, aucune note réécrite (idempotent)');
+{
+  const f = fauxSupabase({ prospects: fiches.map((p) => ({ ...p })), activities: [{ action_type: 'questionnaire', description: descriptionActivite(Q1) }] });
+  const store = makeStore({ sb: f.sb });
+  const apercu = await store.questionnaires([Q1, Q2, QX], { ecrire: false });
+  verif(apercu.recus === 3 && apercu.nouvelles === 1 && apercu.fiches === 1 && !apercu.ecrit && f.ops.length === 0, 'aperçu (dry-run) : rien d’écrit, 1 nouvelle réponse (Q1 déjà à l’historique)');
+  const r = await store.questionnaires([Q1, Q2, QX]);
+  const insert = f.ops.find((o) => o[0] === 'insert' && o[1] === 'activities'); const maj = f.ops.find((o) => o[0] === 'update' && o[1] === 'prospects');
+  verif(r.ecrit && insert && insert[2].length === 1 && insert[2][0].description.includes('[q_00000000000000a2]') && maj && maj[2] === 'p1' && Object.keys(maj[3]).join() === 'notes', 'écriture : 1 entrée d’historique, notes de la fiche seules mises à jour');
+}
 
 console.log(`\n${ok} vérifications réussies, ${ko} en échec`); process.exit(ko ? 1 : 0);
