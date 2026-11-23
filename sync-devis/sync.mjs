@@ -186,6 +186,12 @@ function rapport(devis, entreprises, plan, seuils, extra) {
   for (const e of venues) for (const d of e.devis) if (STATUTS_HONORES.has(d.statut)) for (const p of String(d.produits || '').split(' · ')) if (p && !sallesDuTexte(p).size) autres.set(p, (autres.get(p) || 0) + 1);
   const freq = [...autres].filter(([, n]) => n >= 3).sort((a, b) => b[1] - a[1]).slice(0, 20);
   if (freq.length) log(`   autres produits (les plus fréquents) : ${freq.map(([p, n]) => `${p.slice(0, 50)} ×${n}`).join(' · ')}`);
+  if (DRY) {
+    const reco = new Map();
+    for (const e of venues) for (const d of e.devis) if (STATUTS_HONORES.has(d.statut)) for (const p of String(d.produits || '').split(' · ')) if (p && sallesDuTexte(p).size) reco.set(p, (reco.get(p) || 0) + 1);
+    const r = [...reco].filter(([, n]) => n >= 3).sort((a, b) => b[1] - a[1]).slice(0, 40);
+    if (r.length) log(`   produits reconnus : ${r.map(([p, n]) => `${p.slice(0, 60)} → ${[...sallesDuTexte(p)].join('+')} ×${n}`).join(' · ')}`);
+  }
 
   // top clients / prospects par score
   const clients = entreprises

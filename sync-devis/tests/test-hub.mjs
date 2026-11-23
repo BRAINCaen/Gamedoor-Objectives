@@ -167,6 +167,7 @@ const cles = (t) => [...sallesDuTexte(t)].sort().join();
 verif(cles('Quiz Game : "Buzz Your Brain" --- Émissions Au Choix !') === 'quiz' && cles('GARDE À VUE') === 'gav' && cles('IN PRISON') === 'gav' && cles("BACK TO THE 80'S") === '80s' && cles('BACK TO THE 80') === '80s'
   && cles('PERDUS DANS LES BACKROOMS') === 'backrooms' && cles('Escape Box') === 'box' && cles('PSYCHIATRIC · Plateau repas') === 'psy', 'salles reconnues sous leurs noms du Hub et de 4escape (In Prison = Garde à vue)');
 verif(cles('Forfait 80 € par personne · Privatisation Etablissement · Plateau repas') === '' && cles('') === '' && cles(null) === '', 'un prix « 80 € », la privatisation ou un repas ne sont pas des salles');
+verif(cles('PSY') === 'psy' && cles('QUIZZ - GAV') === 'gav,quiz' && cles('Escape game sur site') === 'box','abréviations saisies à la main (PSY, QUIZZ - GAV) ; escape game sur site = hors les murs');
 verif([...famillesDe(new Set(['psy', 'quiz', 'box']))].sort().join() === 'action,escape,quiz' && famillesDe(new Set()).size === 0, 'familles : escape, quiz, action');
 verif(fusionnerSalles('PSYCHIATRIC, IN PRISON', new Set(['gav', 'quiz'])) === 'PSYCHIATRIC, IN PRISON, BUZZ YOUR BRAIN', 'salle manquante ajoutée à la fin ; « IN PRISON » vaut Garde à vue (rien de renommé)');
 verif(fusionnerSalles('Psychiatric x2 ;in prison', new Set(['psy', 'gav'])) === 'Psychiatric x2 ;in prison' && fusionnerSalles(null, new Set()) === '', 'rien à ajouter : texte saisi rendu au caractère près');
