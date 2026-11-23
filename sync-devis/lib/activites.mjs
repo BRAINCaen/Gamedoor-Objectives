@@ -7,7 +7,7 @@
 
 export const SALLES = [
   { cle: 'psy', nom: 'PSYCHIATRIC', famille: 'escape', re: /psych|\bpsy\b/i },
-  { cle: 'gav', nom: 'GARDE À VUE', famille: 'escape', re: /garde\s*[àa]\s*vue|prison/i },
+  { cle: 'gav', nom: 'GARDE À VUE', famille: 'escape', re: /garde\s*[àa]\s*vue|prison|\bgav\b/i },
   { cle: '80s', nom: "BACK TO THE 80'S", famille: 'escape', re: /back\s*to\s*the\s*80|ann[ée]es\s*80|\b80'?s\b/i },
   { cle: 'backrooms', nom: 'BACKROOMS', famille: 'escape', re: /backroom/i },
   { cle: 'phobie', nom: 'PHOBIE', famille: 'escape', re: /phobi/i },
