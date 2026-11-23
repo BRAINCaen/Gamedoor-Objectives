@@ -2,6 +2,7 @@
 // 23/11/2026). Module PUR (tests : tests/test-hub.mjs).
 // Familles reprises du Hub (src/lib/familles.js du dépôt GAMEDOOR-HUB) : Escape = les salles (Psychiatric, Garde à vue, qui
 // s'appelait In Prison, Back to the 80's…), Quiz = Buzz Your Brain, Action = Escape Box (hors les murs).
+// « Episode 1 PSYCHIATRIC », « Episode 2 IN PRISON » (intitulés de 4escape) : des épisodes de la même histoire, pas une salle.
 // La colonne clients.salles_jouees reste du texte libre (saisie à la main ou import historique) : la synchro n'y AJOUTE que les
 // salles des devis honorés qui n'y sont pas encore, sous leur nom du Hub ; elle n'efface ni ne renomme jamais rien.
 
@@ -11,7 +12,6 @@ export const SALLES = [
   { cle: '80s', nom: "BACK TO THE 80'S", famille: 'escape', re: /back\s*to\s*the\s*80|ann[ée]es\s*80|\b80'?s\b/i },
   { cle: 'backrooms', nom: 'BACKROOMS', famille: 'escape', re: /backroom/i },
   { cle: 'phobie', nom: 'PHOBIE', famille: 'escape', re: /phobi/i },
-  { cle: 'episode', nom: 'EPISODE', famille: 'escape', re: /[ée]pisode/i },
   { cle: 'quiz', nom: 'BUZZ YOUR BRAIN', famille: 'quiz', re: /quiz|buzz/i },
   { cle: 'box', nom: 'ESCAPE BOX', famille: 'action', re: /escape\s*box|escape\s*game\s*sur\s*site/i }, // hors les murs
 ];
