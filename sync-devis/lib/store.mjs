@@ -14,6 +14,16 @@ const CHUNK = 500;
 const chunk = (arr, n) => { const o = []; for (let i = 0; i < arr.length; i += n) o.push(arr.slice(i, i + n)); return o; };
 const estPaye = (statut) => STATUTS_HONORES.has(statut);
 
+// Les fiches clients/prospects s'écrivent une par une (≈ 900 requêtes, ~0,15 s chacune : 2 min 30 au total).
+// On en envoie N à la fois : mêmes écritures, même résultat, ~N fois plus vite (bouton « Synchroniser » du CRM).
+export async function enParallele(items, n, fn) {
+  let i = 0;
+  const ouvriers = Array.from({ length: Math.max(1, Math.min(n, items.length)) }, async () => {
+    while (i < items.length) { const k = i++; await fn(items[k], k); }
+  });
+  await Promise.all(ouvriers);
+}
+
 // Source des devis : 'hub' (depuis le 02/11/2026) ou '4escape' (avant). Le bloc auto porte le nom de la source ; un
 // ancien bloc ⟦4escape⟧ est REMPLACÉ par le bloc ⟦Hub⟧ (jamais deux blocs sur une même fiche).
 export const SOURCES = {
@@ -58,11 +68,14 @@ export function garderConnu(row, ex) {
   return row;
 }
 
-export function makeStore({ source = 'hub' } = {}) {
+export function makeStore({ source = 'hub', sb: sbFourni = null, parallele = 8 } = {}) {
   const S = SOURCES[source] || SOURCES.hub;
-  const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_SERVICE_KEY;
-  if (!url || !key) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_KEY manquants');
-  const sb = createClient(url, key, { auth: { persistSession: false } });
+  let sb = sbFourni; // client simulé pour les tests hors ligne
+  if (!sb) {
+    const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_SERVICE_KEY;
+    if (!url || !key) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_KEY manquants');
+    sb = createClient(url, key, { auth: { persistSession: false } });
+  }
 
   const fetchAll = async (table, cols) => {
     let out = [], from = 0;
@@ -129,7 +142,7 @@ export function makeStore({ source = 'hub' } = {}) {
 
     // 2) CLIENTS (sociétés ayant au moins un devis honoré) — préserve le manuel
     const cliExist = new Map((await fetchAll('clients', 'id,societe')).map((c) => [normSociete(c.societe), c]));
-    for (const e of soc.filter((e) => e.nbHonores > 0)) {
+    await enParallele(soc.filter((e) => e.nbHonores > 0), parallele, async (e) => {
       const sv = scoreValeur(e, seuils, now);
       const derivé = {
         ca_total: Math.round(e.ca * 100) / 100, nb_sessions: e.nbHonores,
@@ -147,7 +160,7 @@ export function makeStore({ source = 'hub' } = {}) {
         });
         if (!error) res.clients++;
       }
-    }
+    });
 
     // 3) PROSPECTS (toutes les sociétés) — remplace le bloc note, garde le reste
     // On relit aussi les coordonnées : le score tient compte de la qualité de
@@ -156,7 +169,7 @@ export function makeStore({ source = 'hub' } = {}) {
       'id,societe,notes,date_relance,email,email_direct,telephone,contact_direct,checks_json'))
       .map((p) => [normSociete(p.societe), p]));
     const prospectIdParKey = new Map();
-    for (const e of soc) {
+    await enParallele(soc, parallele, async (e) => {
       // Le score POTENTIEL issu des devis sert de BASE ; l'avancement dans le
       // pipeline et l'état de la fiche la modulent (±4). Règle identique à
       // celle du CRM (lib/engagement.mjs ↔ section SCORE D'ENGAGEMENT de
@@ -199,7 +212,7 @@ export function makeStore({ source = 'hub' } = {}) {
         }).select('id').single();
         if (!error && data) { res.prospects++; prospectIdParKey.set(e.key, data.id); }
       }
-    }
+    });
 
     // 4) ACTIVITIES — seulement nouveaux + changements (idempotent)
     const acts = [];

@@ -2,7 +2,8 @@
 //   node tests/test-hub.mjs
 import { generateKeyPairSync, verify } from 'node:crypto';
 import { transformHub, statutSynchro, fetchHub } from '../lib/hub.mjs';
-import { remplacerBloc, garderConnu } from '../lib/store.mjs';
+import { remplacerBloc, garderConnu, makeStore, enParallele } from '../lib/store.mjs';
+import { calcSeuils } from '../lib/score.mjs';
 import { grouperParEntreprise, STATUTS_FIGES, STATUT_CRM } from '../lib/transform.mjs';
 
 let ok = 0, ko = 0;
@@ -77,5 +78,49 @@ await fetchHub({ url: 'https://hub.test', cle: paire.privateKey.export({ type: '
 verif(erreur && /401/.test(erreur.message) && /Signature invalide/.test(erreur.message), 'refus du Hub remonté tel quel (pas de nouvel essai sur 401)');
 erreur = null; await fetchHub({ cle: '' }).catch((e) => { erreur = e; });
 verif(erreur && /HUB_PONT_CRM_CLE_PRIVEE/.test(erreur.message), 'clé absente : message clair');
+
+// --- Écriture (store.appliquer) sur un Supabase simulé : en parallèle = exactement les mêmes écritures qu'une par une ---
+function fauxSupabase(base) {
+  const ops = []; let enVol = 0, maxEnVol = 0;
+  const attente = (cle) => new Promise((r) => setTimeout(r, (String(cle).length * 7) % 13)); // ordre d'arrivée brassé
+  const from = (table) => ({
+    select: () => ({ range: async (a, b) => ({ data: (base[table] || []).slice(a, b + 1), error: null }) }),
+    upsert: async (rows) => { ops.push(['upsert', table, rows]); return { error: null }; },
+    update: (patch) => ({ eq: async (_k, id) => {
+      enVol++; maxEnVol = Math.max(maxEnVol, enVol); await attente(id); enVol--;
+      ops.push(['update', table, id, patch]); return { error: null };
+    } }),
+    insert: (rows) => ({
+      then: (res, rej) => { ops.push(['insert', table, rows]); return Promise.resolve({ error: null }).then(res, rej); },
+      select: () => ({ single: async () => {
+        enVol++; maxEnVol = Math.max(maxEnVol, enVol); await attente(rows.societe); enVol--;
+        ops.push(['insert', table, rows]); return { data: { id: `nouveau-${rows.societe}` }, error: null };
+      } }),
+    }),
+  });
+  return { sb: { from }, ops, max: () => maxEnVol };
+}
+const base = () => ({
+  devis: [],
+  clients: [{ id: 'c1', societe: 'LA POSTE' }],
+  prospects: [{ id: 'p1', societe: 'BETA', notes: 'note manuelle\n⟦Hub⟧ancien⟦/Hub⟧', date_relance: '2026-12-01', email: 'x', email_direct: null, telephone: '', contact_direct: null, checks_json: null }],
+  activities: [],
+});
+const ecrire = async (parallele) => {
+  const f = fauxSupabase(base());
+  const store = makeStore({ sb: f.sb, parallele });
+  const ents = grouperParEntreprise(devis);
+  const res = await store.appliquer({ devis, entreprises: ents, plan: { nouveaux: devis, changes: [] }, seuils: calcSeuils(ents), now: new Date('2026-11-23T12:00:00Z') });
+  const canon = f.ops.map((o) => JSON.stringify(o)).sort();
+  return { res, canon, max: f.max() };
+};
+const un = await ecrire(1), huit = await ecrire(8);
+verif(JSON.stringify(un.canon) === JSON.stringify(huit.canon) && JSON.stringify(un.res) === JSON.stringify(huit.res),
+  `écriture 8 à la fois = écriture une par une (${un.canon.length} écritures identiques, ${huit.res.prospects} prospects, ${huit.res.clients} client(s), ${huit.res.activities} activités)`);
+verif(un.max === 1 && huit.max > 1, `les fiches partent bien en parallèle (${huit.max} à la fois, contre 1 avant)`);
+const actsUn = JSON.parse(un.canon.find((o) => o.includes('"activities"')) || '[0,0,[]]')[2];
+verif(actsUn.length > 0 && actsUn.every((a) => a.prospect_id), 'chaque entrée d\'historique reste rattachée à sa fiche (identifiant connu après les écritures parallèles)');
+let vus = []; await enParallele([1, 2, 3, 4, 5], 3, async (x) => { vus.push(x); });
+verif(vus.sort().join() === '1,2,3,4,5', 'enParallele traite chaque élément une fois et une seule');
 
 console.log(`\n${ok} vérifications réussies, ${ko} en échec`); process.exit(ko ? 1 : 0);
