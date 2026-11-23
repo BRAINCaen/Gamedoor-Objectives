@@ -20,7 +20,8 @@
 // ============================================================================
 
 import fs from 'node:fs';
-import { transform, grouperParEntreprise, STATUTS_FIGES, STATUT_CRM } from './lib/transform.mjs';
+import { transform, grouperParEntreprise, STATUTS_FIGES, STATUTS_HONORES, STATUT_CRM } from './lib/transform.mjs';
+import { SALLES, sallesDuTexte } from './lib/activites.mjs';
 import { calcSeuils, scoreValeur, scorePotentiel } from './lib/score.mjs';
 import { normSociete } from './lib/csv.mjs';
 
@@ -176,6 +177,16 @@ function rapport(devis, entreprises, plan, seuils, extra) {
     log(`   ${c.absents.length} devis connus de Supabase absents de la source${c.absents.length ? ` (gardés tels quels, ex. ${c.absents.slice(0, 8).join(', ')})` : ''}`);
   }
 
+  // Salles jouées des sociétés venues (devis honorés) : ce que voient les filtres de l'onglet Clients du CRM. Produits sans salle :
+  // seulement les intitulés fréquents (≥ 3 devis, 50 caractères), jamais un texte isolé qui pourrait nommer quelqu'un (journaux publics).
+  const venues = entreprises.filter((e) => e.est_societe && e.societe && e.nbHonores > 0);
+  const parSalle = SALLES.map((s) => [s.nom, venues.filter((e) => e.salles.has(s.cle)).length]).filter(([, n]) => n);
+  log(`\nSalles jouées (${venues.length} sociétés venues, d'après leurs devis honorés) : ${parSalle.map(([n, v]) => `${n} ${v}`).join(' · ') || 'aucune'} · ${venues.filter((e) => !e.salles.size).length} sans salle reconnue`);
+  const autres = new Map();
+  for (const e of venues) for (const d of e.devis) if (STATUTS_HONORES.has(d.statut)) for (const p of String(d.produits || '').split(' · ')) if (p && !sallesDuTexte(p).size) autres.set(p, (autres.get(p) || 0) + 1);
+  const freq = [...autres].filter(([, n]) => n >= 3).sort((a, b) => b[1] - a[1]).slice(0, 20);
+  if (freq.length) log(`   autres produits (les plus fréquents) : ${freq.map(([p, n]) => `${p.slice(0, 50)} ×${n}`).join(' · ')}`);
+
   // top clients / prospects par score
   const clients = entreprises
     .map((e) => ({ e, s: scoreValeur(e, seuils, now) }))
@@ -222,9 +233,16 @@ function rapport(devis, entreprises, plan, seuils, extra) {
   const plan = diff(devis, existants);
   rapport(devis, entreprises, plan, seuils, { ignores, repris, payesGardes, continuite: existants.size ? continuite(devis, existants) : null });
 
-  const logQuestionnaires = (q) => log(`Questionnaires entreprises : ${q.recus} reçu(s) du Hub · ${q.rattaches} rattaché(s) à une fiche · ${q.nouvelles} nouvelle(s) réponse(s) à l’historique · ${q.fiches} bloc(s) de notes ${q.ecrit ? 'mis à jour' : 'à mettre à jour'}${q.non_rattaches.length ? ` · ${q.non_rattaches.length} sans fiche : ${q.non_rattaches.slice(0, 10).join(', ')}` : ''}`);
+  const logQuestionnaires = (q) => log(`Questionnaires entreprises : ${q.recus} reçu(s) du Hub · ${q.rattaches} rattaché(s) à une fiche · ${q.nouvelles} nouvelle(s) réponse(s) à l’historique · ${q.fiches} bloc(s) de notes ${q.ecrit ? 'mis à jour' : 'à mettre à jour'} (+ ${q.clients || 0} fiche(s) client)${q.non_rattaches.length ? ` · ${q.non_rattaches.length} sans fiche : ${q.non_rattaches.slice(0, 10).join(', ')}` : ''}`);
   if (questionnaires === null && SOURCE === 'hub') log('Questionnaires entreprises : non fournis par le Hub (pont plus ancien ou lecture en échec).');
   if (DRY) {
+    if (store) {
+      try {
+        const a = await store.apercuSalles(entreprises);
+        const mots = [...a.mots].filter(([, n]) => n >= 2).sort((x, y) => y[1] - x[1]).slice(0, 25);
+        log(`Salles des fiches clients : ${a.clients} fiches (${a.avecSalles} avec salles saisies) · ${a.aCompleter} à compléter · ${a.nouvelles} nouvelle(s) fiche(s) avec salles${mots.length ? `\n   déjà saisi (≥ 2 fiches) : ${mots.map(([m, n]) => `${m.slice(0, 40)} ×${n}`).join(' · ')}` : ''}`);
+      } catch (e) { log(`⚠️  Salles : ${e.message}`); }
+    }
     if (questionnaires && store) { try { logQuestionnaires(await store.questionnaires(questionnaires, { ecrire: false })); } catch (e) { log(`⚠️  Questionnaires : ${e.message}`); } }
     log('\n🧪 DRY-RUN : rien n’a été écrit.'); return;
   }
@@ -253,7 +271,7 @@ function rapport(devis, entreprises, plan, seuils, extra) {
       topProspects: top(entreprises.filter((e) => e.aEncours), scorePotentiel),
     };
     await store.finRun(runId, { status: 'done', rapport: rapportJSON });
-    log(`✅ Terminé : ${res.devisUpserts} devis, ${res.prospects} prospects, ${res.clients} clients, ${res.activities} activités.`);
+    log(`✅ Terminé : ${res.devisUpserts} devis, ${res.prospects} prospects, ${res.clients} clients (salles complétées sur ${res.salles}), ${res.activities} activités.`);
   } catch (e) {
     await store.finRun(runId, { status: 'error', message: e.message });
     throw e;

@@ -91,5 +91,28 @@ export function planQuestionnaires(questionnaires, { prospects = [], dejaNotes =
   return plan;
 }
 
+/**
+ * Fiches CLIENTS (onglet Clients du CRM, filtres « A répondu », « OK photos »… du 23/11/2026) : le même bloc ⟦Questionnaire⟧ (dernière
+ * réponse) dans leurs notes, et la satisfaction (étoiles) prise de la note globale /5 si elle est encore vide (jamais écrasée).
+ * Rend [{ id, maj: { notes?, satisfaction? } }], seulement pour les fiches qui changent.
+ */
+export function planClientsQuestionnaires(questionnaires, clients = []) {
+  const parCle = new Map(clients.map((c) => [normSociete(c.societe), c]));
+  const derniere = new Map();
+  for (const q of [...(questionnaires || [])].filter((x) => x && x.id).sort((a, b) => String(a.recu_le).localeCompare(String(b.recu_le)))) {
+    const c = parCle.get(cleEntreprise(q)); if (c) derniere.set(c.id, { c, q });
+  }
+  const plan = [];
+  for (const { c, q } of derniere.values()) {
+    const maj = {};
+    const notes = remplacerBlocQuestionnaire(c.notes, blocQuestionnaire(q));
+    if (notes !== (c.notes || '')) maj.notes = notes;
+    const g = q.notes ? Number(q.notes.globale) : NaN;
+    if (!c.satisfaction && Number.isInteger(g) && g >= 1 && g <= 5) maj.satisfaction = g;
+    if (Object.keys(maj).length) plan.push({ id: c.id, maj });
+  }
+  return plan;
+}
+
 /** Identifiants [q_…] déjà présents dans l'historique. */
 export const idsDejaNotes = (activites) => new Set((activites || []).map((a) => (String(a.description || '').match(RE_ID) || [])[1]).filter(Boolean));

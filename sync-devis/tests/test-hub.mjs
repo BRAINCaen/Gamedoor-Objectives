@@ -4,7 +4,9 @@ import { generateKeyPairSync, verify } from 'node:crypto';
 import { transformHub, statutSynchro, fetchHub } from '../lib/hub.mjs';
 import { remplacerBloc, garderConnu, makeStore, enParallele } from '../lib/store.mjs';
 import { calcSeuils } from '../lib/score.mjs';
-import { blocQuestionnaire, remplacerBlocQuestionnaire, planQuestionnaires, idsDejaNotes, descriptionActivite } from '../lib/questionnaires.mjs';
+import { blocQuestionnaire, remplacerBlocQuestionnaire, planQuestionnaires, planClientsQuestionnaires, idsDejaNotes, descriptionActivite } from '../lib/questionnaires.mjs';
+import { sallesDuTexte, fusionnerSalles, famillesDe } from '../lib/activites.mjs';
+import { normSociete } from '../lib/csv.mjs';
 import { grouperParEntreprise, STATUTS_FIGES, STATUT_CRM } from '../lib/transform.mjs';
 
 let ok = 0, ko = 0;
@@ -158,6 +160,51 @@ verif(pq2.activites.length === 0 && pq2.notes.length === 0 && pq2.deja === 2, 's
   const r = await store.questionnaires([Q1, Q2, QX]);
   const insert = f.ops.find((o) => o[0] === 'insert' && o[1] === 'activities'); const maj = f.ops.find((o) => o[0] === 'update' && o[1] === 'prospects');
   verif(r.ecrit && insert && insert[2].length === 1 && insert[2][0].description.includes('[q_00000000000000a2]') && maj && maj[2] === 'p1' && Object.keys(maj[3]).join() === 'notes', 'écriture : 1 entrée d’historique, notes de la fiche seules mises à jour');
+}
+
+// --- Salles jouées (filtres de l'onglet Clients du CRM, 23/11/2026) ---
+const cles = (t) => [...sallesDuTexte(t)].sort().join();
+verif(cles('Quiz Game : "Buzz Your Brain" --- Émissions Au Choix !') === 'quiz' && cles('GARDE À VUE') === 'gav' && cles('IN PRISON') === 'gav' && cles("BACK TO THE 80'S") === '80s' && cles('BACK TO THE 80') === '80s'
+  && cles('PERDUS DANS LES BACKROOMS') === 'backrooms' && cles('Escape Box') === 'box' && cles('PSYCHIATRIC · Plateau repas') === 'psy', 'salles reconnues sous leurs noms du Hub et de 4escape (In Prison = Garde à vue)');
+verif(cles('Forfait 80 € par personne · Privatisation Etablissement · Plateau repas') === '' && cles('') === '' && cles(null) === '', 'un prix « 80 € », la privatisation ou un repas ne sont pas des salles');
+verif([...famillesDe(new Set(['psy', 'quiz', 'box']))].sort().join() === 'action,escape,quiz' && famillesDe(new Set()).size === 0, 'familles : escape, quiz, action');
+verif(fusionnerSalles('PSYCHIATRIC, IN PRISON', new Set(['gav', 'quiz'])) === 'PSYCHIATRIC, IN PRISON, BUZZ YOUR BRAIN', 'salle manquante ajoutée à la fin ; « IN PRISON » vaut Garde à vue (rien de renommé)');
+verif(fusionnerSalles('Psychiatric x2 ;in prison', new Set(['psy', 'gav'])) === 'Psychiatric x2 ;in prison' && fusionnerSalles(null, new Set()) === '', 'rien à ajouter : texte saisi rendu au caractère près');
+const fs1 = fusionnerSalles('', new Set(['quiz', 'psy']));
+verif(fs1 === 'PSYCHIATRIC, BUZZ YOUR BRAIN' && fusionnerSalles(fs1, new Set(['quiz', 'psy'])) === fs1, 'fiche vide : salles dans l’ordre du Hub ; rejouer ne change rien');
+const dvS = [
+  { reference: 'X1', _key: normSociete('GAMMA'), societe: 'GAMMA', est_societe: true, statut: 'completed', montant_ttc: 300, produits: 'PSYCHIATRIC · Plateau repas', date_evenement: '2026-10-01' },
+  { reference: 'X2', _key: normSociete('GAMMA'), societe: 'GAMMA', est_societe: true, statut: 'on-hold', montant_ttc: 200, produits: 'Quiz Game : "Buzz Your Brain"', date_evenement: '2026-12-20' },
+  { reference: 'X3', _key: normSociete('LA POSTE'), societe: 'LA POSTE', est_societe: true, statut: 'refunded', montant_ttc: 500, produits: 'GARDE À VUE · BUZZ YOUR BRAIN', date_evenement: '2026-09-01' },
+];
+const entS = grouperParEntreprise(dvS);
+verif([...entS.find((e) => e.societe === 'GAMMA').salles].join() === 'psy', 'seules les salles des devis HONORÉS comptent (le quiz encore en devis ne compte pas)');
+{
+  const f = fauxSupabase({ devis: [], clients: [{ id: 'c1', societe: 'LA POSTE', salles_jouees: 'IN PRISON' }], prospects: [], activities: [] });
+  const store = makeStore({ sb: f.sb });
+  const res = await store.appliquer({ devis: dvS, entreprises: entS, plan: { nouveaux: dvS, changes: [] }, seuils: calcSeuils(entS), now: new Date('2026-11-23T12:00:00Z') });
+  const majPoste = f.ops.find((o) => o[0] === 'update' && o[1] === 'clients' && o[2] === 'c1');
+  const insGamma = f.ops.find((o) => o[0] === 'insert' && o[1] === 'clients' && o[2].societe === 'GAMMA');
+  verif(majPoste && majPoste[3].salles_jouees === 'IN PRISON, BUZZ YOUR BRAIN' && insGamma && insGamma[2].salles_jouees === 'PSYCHIATRIC' && res.salles === 2, `fiches clients : salles complétées (LA POSTE garde « IN PRISON » + le quiz) ou créées (GAMMA), ${res.salles} fiches`);
+  verif(majPoste && !('notes' in majPoste[3]) && !('satisfaction' in majPoste[3]), 'la synchro des devis ne touche ni aux notes ni à la satisfaction du client');
+  const f2 = fauxSupabase({ devis: [], clients: [{ id: 'c1', societe: 'LA POSTE', salles_jouees: majPoste ? majPoste[3].salles_jouees : '' }, { id: 'c2', societe: 'GAMMA', salles_jouees: 'PSYCHIATRIC' }], prospects: [], activities: [] });
+  const res2 = await makeStore({ sb: f2.sb }).appliquer({ devis: dvS, entreprises: entS, plan: { nouveaux: [], changes: [] }, seuils: calcSeuils(entS), now: new Date('2026-11-23T12:00:00Z') });
+  verif(res2.salles === 0 && f2.ops.filter((o) => o[0] === 'update' && o[1] === 'clients').every((o) => !('salles_jouees' in o[3])), 'synchro suivante : colonne salles non réécrite (idempotent)');
+  const ap = await makeStore({ sb: fauxSupabase({ clients: [{ id: 'c1', societe: 'LA POSTE', salles_jouees: 'IN PRISON' }, { id: 'c3', societe: 'DELTA', salles_jouees: 'in prison, Psychiatric' }] }).sb }).apercuSalles(entS);
+  verif(ap.clients === 2 && ap.avecSalles === 2 && ap.aCompleter === 1 && ap.nouvelles === 1 && ap.mots.get('IN PRISON') === 2, 'aperçu dry-run : fiches à compléter, nouvelles fiches, vocabulaire déjà saisi');
+}
+
+// --- Questionnaire → fiches CLIENTS (filtres « A répondu », « OK photos »…) ---
+{
+  const cli = [{ id: 'c9', societe: 'ACME NORMANDIE', notes: 'manuel', satisfaction: null }, { id: 'c8', societe: 'Autre', satisfaction: 3 }];
+  const pc = planClientsQuestionnaires([Q2, Q1, QX], cli);
+  verif(pc.length === 1 && pc[0].id === 'c9' && pc[0].maj.notes.startsWith('manuel') && pc[0].maj.notes.includes('venue du 09/12/2026') && pc[0].maj.satisfaction === 5, 'client : bloc de la dernière réponse ajouté aux notes, satisfaction vide = note globale');
+  const pc2 = planClientsQuestionnaires([Q1, Q2], [{ ...cli[0], notes: pc[0].maj.notes, satisfaction: 4 }]);
+  verif(pc2.length === 0, 'satisfaction déjà saisie jamais écrasée ; rejouer ne réécrit rien');
+  const f = fauxSupabase({ prospects: [], activities: [], clients: cli.map((c) => ({ ...c })) });
+  const r = await makeStore({ sb: f.sb }).questionnaires([Q1, Q2]);
+  const maj = f.ops.find((o) => o[0] === 'update' && o[1] === 'clients');
+  verif(r.clients === 1 && maj && maj[2] === 'c9' && Object.keys(maj[3]).sort().join() === 'notes,satisfaction', 'écriture : fiche client mise à jour (notes + satisfaction seulement)');
 }
 
 console.log(`\n${ok} vérifications réussies, ${ko} en échec`); process.exit(ko ? 1 : 0);

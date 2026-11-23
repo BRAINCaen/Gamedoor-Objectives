@@ -1,6 +1,7 @@
 // Couche d'écriture Supabase de la synchro. Règles :
 //  · idempotente : n'écrit d'historique que pour les devis nouveaux/changés ;
-//  · préserve le travail manuel (notes libres, satisfaction, salles, services) ;
+//  · préserve le travail manuel (notes libres, satisfaction, salles, services) : aux salles jouées, la synchro n'AJOUTE que celles des
+//    devis honorés qui manquent (lib/activites.mjs, filtres de l'onglet Clients) ; une satisfaction vide prend la note du questionnaire ;
 //  · remplace le bloc de note auto au lieu de l'empiler (marqueurs ⟦Hub⟧, ou ⟦4escape⟧ avant le 02/11/2026) ;
 //  · n'efface jamais une donnée connue d'un devis par un champ vide de la source (téléphone, date de validation…).
 
@@ -9,7 +10,8 @@ import { normSociete, iso } from './csv.mjs';
 import { STATUTS_HONORES, STATUTS_FIGES, STATUT_CRM, LIBELLE_STATUT } from './transform.mjs';
 import { scoreValeur, scorePotentiel } from './score.mjs';
 import { scoreFinal } from './engagement.mjs';
-import { planQuestionnaires, idsDejaNotes, ACTION as ACTION_QUESTIONNAIRE } from './questionnaires.mjs';
+import { planQuestionnaires, planClientsQuestionnaires, idsDejaNotes, ACTION as ACTION_QUESTIONNAIRE } from './questionnaires.mjs';
+import { fusionnerSalles, morceaux } from './activites.mjs';
 
 const CHUNK = 500;
 const chunk = (arr, n) => { const o = []; for (let i = 0; i < arr.length; i += n) o.push(arr.slice(i, i + n)); return o; };
@@ -111,7 +113,7 @@ export function makeStore({ source = 'hub', sb: sbFourni = null, parallele = 8 }
   async function appliquer({ devis, entreprises, plan, seuils, now }) {
     const nowISO = now.toISOString();
     const existants = new Map((await chargerDevis()).entries());
-    const res = { devisUpserts: 0, prospects: 0, clients: 0, activities: 0 };
+    const res = { devisUpserts: 0, prospects: 0, clients: 0, salles: 0, activities: 0 };
 
     // 1) TABLE DEVIS — upsert avec horodatages préservés/calculés
     const changeSet = new Set(plan.changes.map((c) => c.d.reference));
@@ -142,7 +144,7 @@ export function makeStore({ source = 'hub', sb: sbFourni = null, parallele = 8 }
     const soc = entreprises.filter((e) => e.est_societe && e.societe);
 
     // 2) CLIENTS (sociétés ayant au moins un devis honoré) — préserve le manuel
-    const cliExist = new Map((await fetchAll('clients', 'id,societe')).map((c) => [normSociete(c.societe), c]));
+    const cliExist = new Map((await fetchAll('clients', 'id,societe,salles_jouees')).map((c) => [normSociete(c.societe), c]));
     await enParallele(soc.filter((e) => e.nbHonores > 0), parallele, async (e) => {
       const sv = scoreValeur(e, seuils, now);
       const derivé = {
@@ -153,13 +155,17 @@ export function makeStore({ source = 'hub', sb: sbFourni = null, parallele = 8 }
       };
       const ex = cliExist.get(e.key);
       if (ex) {
-        const { error } = await sb.from('clients').update(derivé).eq('id', ex.id); // ne touche pas notes/satisfaction/…
-        if (!error) res.clients++;
+        // Salles : seulement celles qui manquent, ajoutées à la fin (rien d'effacé ni de renommé) ; sinon la colonne n'est pas touchée.
+        const salles = fusionnerSalles(ex.salles_jouees, e.salles);
+        const maj = salles !== (ex.salles_jouees || '') ? { ...derivé, salles_jouees: salles } : derivé;
+        const { error } = await sb.from('clients').update(maj).eq('id', ex.id); // ne touche pas notes/satisfaction/…
+        if (!error) { res.clients++; if (maj !== derivé) res.salles++; }
       } else {
+        const salles = fusionnerSalles('', e.salles) || null;
         const { error } = await sb.from('clients').insert({
-          societe: e.societe, email: [...e.emails][0] || '', telephone: [...e.tels][0] || '', ...derivé,
+          societe: e.societe, email: [...e.emails][0] || '', telephone: [...e.tels][0] || '', ...derivé, salles_jouees: salles,
         });
-        if (!error) res.clients++;
+        if (!error) { res.clients++; if (salles) res.salles++; }
       }
     });
 
@@ -244,8 +250,25 @@ export function makeStore({ source = 'hub', sb: sbFourni = null, parallele = 8 }
 
   // 5) QUESTIONNAIRES ENTREPRISES (Hub, 23/11/2026) — bloc ⟦Questionnaire⟧ de la dernière réponse + une entrée d'historique par
   // réponse (une seule fois). Lu APRÈS appliquer() : les notes relues portent déjà le bloc ⟦Hub⟧ du jour. ecrire=false : aperçu.
+  // Aperçu (dry-run) des salles jouées : combien de fiches clients la synchro compléterait, et le vocabulaire déjà saisi.
+  async function apercuSalles(entreprises) {
+    const clients = await fetchAll('clients', 'id,societe,salles_jouees');
+    const parCle = new Map(clients.map((c) => [normSociete(c.societe), c]));
+    let aCompleter = 0, nouvelles = 0;
+    for (const e of entreprises.filter((x) => x.est_societe && x.societe && x.nbHonores > 0)) {
+      const c = parCle.get(e.key);
+      if (!c) { if (e.salles.size) nouvelles++; continue; }
+      if (fusionnerSalles(c.salles_jouees, e.salles) !== (c.salles_jouees || '')) aCompleter++;
+    }
+    const mots = new Map();
+    for (const c of clients) for (const m of morceaux(c.salles_jouees)) { const k = m.toUpperCase(); mots.set(k, (mots.get(k) || 0) + 1); }
+    return { clients: clients.length, avecSalles: clients.filter((c) => String(c.salles_jouees || '').trim()).length, aCompleter, nouvelles, mots };
+  }
+
   async function questionnaires(liste, { ecrire = true } = {}) {
     const prospects = await fetchAll('prospects', 'id,societe,notes');
+    const clients = await fetchAll('clients', 'id,societe,notes,satisfaction');
+    const planCli = planClientsQuestionnaires(liste, clients);
     const deja = [];
     for (let from = 0; ; from += 1000) {
       const { data, error } = await sb.from('activities').select('description').eq('action_type', ACTION_QUESTIONNAIRE).range(from, from + 999);
@@ -253,7 +276,7 @@ export function makeStore({ source = 'hub', sb: sbFourni = null, parallele = 8 }
       deja.push(...(data || [])); if (!data || data.length < 1000) break;
     }
     const plan = planQuestionnaires(liste, { prospects, dejaNotes: idsDejaNotes(deja) });
-    const res = { recus: (liste || []).length, rattaches: plan.rattaches, non_rattaches: plan.non_rattaches, nouvelles: plan.activites.length, fiches: plan.notes.length, ecrit: false };
+    const res = { recus: (liste || []).length, rattaches: plan.rattaches, non_rattaches: plan.non_rattaches, nouvelles: plan.activites.length, fiches: plan.notes.length, clients: planCli.length, ecrit: false };
     if (!ecrire) return res;
     await enParallele(plan.notes, parallele, async (x) => {
       const { error } = await sb.from('prospects').update({ notes: x.notes }).eq('id', x.id);
@@ -263,8 +286,12 @@ export function makeStore({ source = 'hub', sb: sbFourni = null, parallele = 8 }
       const { error } = await sb.from('activities').insert(c);
       if (error) throw new Error(`activities (questionnaire) : ${error.message}`);
     }
+    await enParallele(planCli, parallele, async (x) => {
+      const { error } = await sb.from('clients').update(x.maj).eq('id', x.id);
+      if (error) throw new Error(`clients (questionnaire) : ${error.message}`);
+    });
     return { ...res, ecrit: true };
   }
 
-  return { chargerDevis, appliquer, debutRun, finRun, questionnaires };
+  return { chargerDevis, appliquer, debutRun, finRun, questionnaires, apercuSalles };
 }

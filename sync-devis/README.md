@@ -32,6 +32,12 @@ de note `⟦Questionnaire⟧…⟦/Questionnaire⟧` = sa dernière réponse (sa
 le droit de publier et où), et une entrée d'historique « Questionnaire » par réponse, une seule fois (`[q_…]`). Réponse sans
 fiche : signalée dans le rapport. Une erreur sur les questionnaires ne fait jamais échouer les devis.
 
+**Salles jouées (depuis le 23/11/2026)** : `lib/activites.mjs` reconnaît les salles dans les produits des devis HONORÉS (Psychiatric,
+Garde à vue = ex-In Prison, Back to the 80's, Backrooms, Buzz Your Brain = le quiz, Escape Box…) et les AJOUTE à `clients.salles_jouees`
+quand elles manquent (rien d'effacé ni de renommé : « IN PRISON » saisi à la main vaut Garde à vue). C'est ce que lisent les filtres
+Quiz / Escape game / salle précise de l'onglet Clients du CRM. Le bloc ⟦Questionnaire⟧ va aussi dans les notes de la fiche client, et une
+satisfaction vide y prend la note globale /5 (jamais écrasée). Le dry-run affiche les salles par entreprise et ce qui serait complété.
+
 Tests hors ligne : `node tests/test-hub.mjs` (lancés aussi par le workflow avant chaque synchro).
 
 ## Comment ça marche

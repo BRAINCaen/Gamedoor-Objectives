@@ -3,6 +3,7 @@
 // être comparée à la table `devis` de Supabase.
 
 import { parseObjects, num, dateFR, iso, isoTs, normSociete } from './csv.mjs';
+import { sallesDuTexte } from './activites.mjs';
 
 const RE_PRIVA = /privatisation/i;
 const RE_REPAS = /restauration|traiteur|viennoiserie|boisson|cocktail|ap[ée]ritif|repas/i;
@@ -101,6 +102,7 @@ export function grouperParEntreprise(devis) {
       priva: false, repas: false,
       dernierHonore: null, prochainEvent: null,
       aEncours: false, montantEncours: 0,
+      salles: new Set(), // salles des devis HONORÉS (lib/activites.mjs) : complètent clients.salles_jouees
     });
     if (d.societe) e.noms.add(d.societe);
     if (d.contact_email) e.emails.add(d.contact_email);
@@ -114,6 +116,7 @@ export function grouperParEntreprise(devis) {
     if (STATUTS_HONORES.has(d.statut)) {
       e.ca += d.montant_ttc;
       e.nbHonores++;
+      for (const k of sallesDuTexte(d.produits)) e.salles.add(k);
       if (ev && (!e.dernierHonore || ev > e.dernierHonore)) e.dernierHonore = ev;
       if (d.reste_du > 0) e.resteDuSouffrance += d.reste_du; // payé mais reste dû
     }
