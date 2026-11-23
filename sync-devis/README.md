@@ -81,9 +81,8 @@ Bouton « Synchroniser » (CRM)
    `SUPABASE_SERVICE_KEY` (les `FE_*` y sont déjà).
 6. **Bouton du CRM** : créer un PAT GitHub (fine-grained, dépôt Gamedoor-Objectives,
    *Contents: Read and write*) et l'ajouter sur Netlify en variable
-   `GITHUB_DISPATCH_TOKEN`, puis redéployer le CRM. (Au 14/11/2026 : pas encore fait,
-   `/api/sync` répond « GITHUB_DISPATCH_TOKEN non configuré » ; la synchro de la nuit,
-   elle, tourne.)
+   `GITHUB_DISPATCH_TOKEN`, puis redéployer le CRM. (Fait le 23/11/2026 : le bouton
+   déclenche la synchro, ≈ 50 s de bout en bout ; les fiches s'écrivent 8 à la fois.)
 
 ## Modes de `sync.mjs`
 
